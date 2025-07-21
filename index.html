@@ -298,16 +298,16 @@
                         </details>
                     `;
                 } else {
-                    const fileUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${fullPath}`;
                     const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${fullPath}`;
+                    const githubUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${fullPath}`;
                     const size = item.size ? ` (${formatFileSize(item.size)})` : '';
                     
                     html += `
                         <div class="tree-item file">
                             <span class="file-icon">${getFileIcon(name)}</span>
-                            <a href="${fileUrl}" target="_blank" title="View on GitHub">${name}</a>
+                            <a href="${rawUrl}" target="_blank" title="View raw file">${name}</a>
                             <span style="color: #586069; font-size: 12px;">${size}</span>
-                            <a href="${rawUrl}" target="_blank" style="margin-left: 8px; font-size: 12px;" title="View raw">[raw]</a>
+                            <a href="${githubUrl}" target="_blank" style="margin-left: 8px; font-size: 12px;" title="View on GitHub">[github]</a>
                         </div>
                     `;
                 }
