@@ -74,27 +74,58 @@
             font-size: 14px;
         }
         
-        .tree-item {
-            margin: 2px 0;
-            white-space: nowrap;
+        .tree-section {
+            margin-bottom: 20px;
         }
         
-        .tree-item a {
+        .folder-header {
+            color: #6f42c1;
+            font-weight: bold;
+            margin: 10px 0 5px 0;
+            font-size: 15px;
+        }
+        
+        .file-list {
+            margin-left: 20px;
+        }
+        
+        .file-item {
+            margin: 3px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .file-icon {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            margin-right: 6px;
+        }
+        
+        .file-link {
             color: #0366d6;
             text-decoration: none;
+            margin-right: 8px;
         }
         
-        .tree-item a:hover {
+        .file-link:hover {
             text-decoration: underline;
         }
         
-        .folder {
-            color: #6f42c1;
-            font-weight: bold;
+        .file-size {
+            color: #586069;
+            font-size: 12px;
+            margin-right: 8px;
         }
         
-        .file {
-            color: #24292e;
+        .github-link {
+            color: #586069;
+            font-size: 12px;
+            text-decoration: none;
+        }
+        
+        .github-link:hover {
+            text-decoration: underline;
         }
         
         .loading {
@@ -116,50 +147,25 @@
             display: flex;
             gap: 20px;
             margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e4e8;
             color: #586069;
             font-size: 14px;
         }
         
-        .expand-all {
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        
-        .expand-all button {
+        .refresh-btn {
             background: none;
             border: 1px solid #e1e4e8;
-            padding: 4px 8px;
+            padding: 4px 12px;
             border-radius: 4px;
             cursor: pointer;
-            margin-right: 5px;
+            font-size: 14px;
+            color: #24292e;
+            margin-bottom: 15px;
         }
         
-        .expand-all button:hover {
+        .refresh-btn:hover {
             background-color: #f6f8fa;
-        }
-        
-        details {
-            cursor: pointer;
-        }
-        
-        details summary {
-            outline: none;
-            user-select: none;
-        }
-        
-        details summary::-webkit-details-marker {
-            color: #586069;
-        }
-        
-        .tree-indent {
-            margin-left: 20px;
-        }
-        
-        .file-icon {
-            display: inline-block;
-            width: 16px;
-            text-align: center;
-            margin-right: 4px;
         }
     </style>
 </head>
@@ -178,11 +184,7 @@
         
         <h2>📁 Repository Files</h2>
         
-        <div class="expand-all">
-            <button onclick="expandAll()">Expand All</button>
-            <button onclick="collapseAll()">Collapse All</button>
-            <button onclick="refreshTree()">Refresh</button>
-        </div>
+        <button class="refresh-btn" onclick="loadRepository()">🔄 Refresh</button>
         
         <div id="file-tree" class="tree-container">
             <div class="loading">Loading repository structure...</div>
@@ -196,7 +198,8 @@
     <script>
         const REPO_OWNER = 'uintent';
         const REPO_NAME = 'StroopApp';
-        const BRANCH = 'master'; // Changed to master
+        const BRANCH = 'master';
+        const BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
         
         let fileCount = 0;
         let folderCount = 0;
@@ -215,37 +218,6 @@
                 showError(`Failed to load repository structure: ${error.message}`);
                 return [];
             }
-        }
-        
-        function buildTree(items) {
-            const root = {};
-            fileCount = 0;
-            folderCount = 0;
-            
-            // Build tree structure
-            items.forEach(item => {
-                const parts = item.path.split('/');
-                let current = root;
-                
-                parts.forEach((part, index) => {
-                    if (!current[part]) {
-                        current[part] = {
-                            type: index === parts.length - 1 ? item.type : 'tree',
-                            sha: item.sha,
-                            size: item.size,
-                            children: {}
-                        };
-                    }
-                    if (index < parts.length - 1) {
-                        current = current[part].children;
-                    }
-                });
-                
-                if (item.type === 'blob') fileCount++;
-                else if (item.type === 'tree') folderCount++;
-            });
-            
-            return root;
         }
         
         function getFileIcon(filename) {
@@ -269,59 +241,90 @@
                 'sh': '📜',
                 'bat': '📜',
                 'gitignore': '🚫',
-                'license': '📜'
+                'license': '📜',
+                'jar': '📦'
             };
+            const lowerFilename = filename.toLowerCase();
+            if (lowerFilename === '.gitignore') return '🚫';
+            if (lowerFilename === 'license') return '📜';
             return icons[ext] || '📄';
         }
         
-        function renderTree(tree, path = '') {
-            let html = '';
-            const entries = Object.entries(tree).sort((a, b) => {
-                // Folders first, then files
-                if (a[1].type === 'tree' && b[1].type !== 'tree') return -1;
-                if (a[1].type !== 'tree' && b[1].type === 'tree') return 1;
-                return a[0].localeCompare(b[0]);
-            });
-            
-            entries.forEach(([name, item]) => {
-                const fullPath = path ? `${path}/${name}` : name;
-                
-                if (item.type === 'tree') {
-                    html += `
-                        <details open>
-                            <summary class="tree-item folder">
-                                <span class="file-icon">📁</span>${name}/
-                            </summary>
-                            <div class="tree-indent">
-                                ${renderTree(item.children, fullPath)}
-                            </div>
-                        </details>
-                    `;
-                } else {
-                    const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${fullPath}`;
-                    const githubUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${fullPath}`;
-                    const size = item.size ? ` (${formatFileSize(item.size)})` : '';
-                    
-                    html += `
-                        <div class="tree-item file">
-                            <span class="file-icon">${getFileIcon(name)}</span>
-                            <a href="${rawUrl}" target="_blank" title="View raw file">${name}</a>
-                            <span style="color: #586069; font-size: 12px;">${size}</span>
-                            <a href="${githubUrl}" target="_blank" style="margin-left: 8px; font-size: 12px;" title="View on GitHub">[github]</a>
-                        </div>
-                    `;
-                }
-            });
-            
-            return html;
-        }
-        
         function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '';
             const k = 1024;
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            return `(${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]})`;
+        }
+        
+        function organizeFiles(items) {
+            const organized = {};
+            fileCount = 0;
+            folderCount = 0;
+            
+            // First, organize files by directory
+            items.forEach(item => {
+                if (item.type === 'blob') {
+                    fileCount++;
+                    const parts = item.path.split('/');
+                    const filename = parts.pop();
+                    const directory = parts.join('/') || 'root';
+                    
+                    if (!organized[directory]) {
+                        organized[directory] = [];
+                    }
+                    
+                    organized[directory].push({
+                        name: filename,
+                        path: item.path,
+                        size: item.size
+                    });
+                } else if (item.type === 'tree') {
+                    folderCount++;
+                }
+            });
+            
+            // Sort directories and files within each directory
+            const sortedOrganized = {};
+            Object.keys(organized).sort().forEach(dir => {
+                sortedOrganized[dir] = organized[dir].sort((a, b) => a.name.localeCompare(b.name));
+            });
+            
+            return sortedOrganized;
+        }
+        
+        function generateStaticHTML(organizedFiles) {
+            let html = '';
+            
+            for (const [directory, files] of Object.entries(organizedFiles)) {
+                // Create folder header
+                const displayDir = directory === 'root' ? '📁 Root Files' : `📁 /${directory}/`;
+                html += `<div class="tree-section">`;
+                html += `<div class="folder-header">${displayDir}</div>`;
+                html += `<div class="file-list">`;
+                
+                // Add all files in this directory
+                files.forEach(file => {
+                    const rawUrl = `${BASE_URL}/${file.path}`;
+                    const githubUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${file.path}`;
+                    const icon = getFileIcon(file.name);
+                    const size = formatFileSize(file.size);
+                    
+                    html += `
+                        <div class="file-item">
+                            <span class="file-icon">${icon}</span>
+                            <a href="${rawUrl}" target="_blank" class="file-link" title="View raw file">${file.name}</a>
+                            <span class="file-size">${size}</span>
+                            <a href="${githubUrl}" target="_blank" class="github-link" title="View on GitHub">[github]</a>
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
+            }
+            
+            return html;
         }
         
         function showError(message) {
@@ -332,24 +335,12 @@
             `;
         }
         
-        function expandAll() {
-            document.querySelectorAll('details').forEach(detail => {
-                detail.open = true;
-            });
-        }
-        
-        function collapseAll() {
-            document.querySelectorAll('details').forEach(detail => {
-                detail.open = false;
-            });
-        }
-        
-        async function refreshTree() {
+        async function loadRepository() {
+            // Show loading state
             document.getElementById('file-tree').innerHTML = '<div class="loading">Loading repository structure...</div>';
-            await loadRepositoryTree();
-        }
-        
-        async function loadRepositoryTree() {
+            document.getElementById('error-container').innerHTML = '';
+            
+            // Fetch repository tree
             const items = await fetchRepoTree();
             
             if (items.length === 0) {
@@ -357,10 +348,16 @@
                 return;
             }
             
-            const tree = buildTree(items);
-            const treeHtml = renderTree(tree);
+            // Organize files by directory
+            const organizedFiles = organizeFiles(items);
             
-            document.getElementById('file-tree').innerHTML = treeHtml;
+            // Generate static HTML
+            const html = generateStaticHTML(organizedFiles);
+            
+            // Write HTML to page
+            document.getElementById('file-tree').innerHTML = html;
+            
+            // Update stats
             document.getElementById('stats').innerHTML = `
                 <span>📁 ${folderCount} folders</span>
                 <span>📄 ${fileCount} files</span>
@@ -368,8 +365,8 @@
             `;
         }
         
-        // Load tree on page load
-        loadRepositoryTree();
+        // Load repository on page load
+        loadRepository();
     </script>
 </body>
 </html>
