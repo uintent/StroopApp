@@ -1,32 +1,29 @@
 # GitHub Pages / Jekyll configuration
-title: Your Project Name
-description: Your project description
-
+title: StroopApp
+description: Research-grade Android application for conducting Stroop tests
 # Theme (optional - GitHub Pages supports these themes by default)
 theme: minima
-
 # Show directory listings
 show_dir_listing: true
-
 # Include normally hidden files in the build
 include:
   - "README.md"
   - "LICENSE"
-
 # Exclude files from being processed/shown
 exclude:
   - "Gemfile"
   - "Gemfile.lock"
   - "node_modules"
   - "vendor"
-
+  - "app"  # Exclude Android app directory
+  - "gradle"
+  - "*.gradle"
+  - "*.properties"
 # Plugins
 plugins:
   - jekyll-sitemap
   - jekyll-seo-tag
-
 # Markdown processor
 markdown: kramdown
-
 # Permalinks
 permalink: pretty
