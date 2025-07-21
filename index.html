@@ -3,60 +3,373 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StroopApp - Research Tool</title>
+    <title>StroopApp - Repository Browser</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #24292e;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
+            background-color: #f6f8fa;
         }
-        .download-section {
-            background: #f0f0f0;
+        
+        .container {
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            padding: 30px;
+        }
+        
+        h1 {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .description {
+            color: #586069;
+            margin-bottom: 30px;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            background-color: #0366d6;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #0256c7;
+        }
+        
+        .btn-secondary {
+            background-color: #586069;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #4a5057;
+        }
+        
+        .tree-container {
+            background-color: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
             padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
+            margin-top: 20px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 14px;
         }
-        .features {
-            margin: 20px 0;
+        
+        .tree-item {
+            margin: 2px 0;
+            white-space: nowrap;
         }
-        .features li {
-            margin: 10px 0;
+        
+        .tree-item a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        
+        .tree-item a:hover {
+            text-decoration: underline;
+        }
+        
+        .folder {
+            color: #6f42c1;
+            font-weight: bold;
+        }
+        
+        .file {
+            color: #24292e;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #586069;
+        }
+        
+        .error {
+            color: #cb2431;
+            padding: 20px;
+            background-color: #ffeef0;
+            border: 1px solid #ffdce0;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            color: #586069;
+            font-size: 14px;
+        }
+        
+        .expand-all {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .expand-all button {
+            background: none;
+            border: 1px solid #e1e4e8;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        
+        .expand-all button:hover {
+            background-color: #f6f8fa;
+        }
+        
+        details {
+            cursor: pointer;
+        }
+        
+        details summary {
+            outline: none;
+            user-select: none;
+        }
+        
+        details summary::-webkit-details-marker {
+            color: #586069;
+        }
+        
+        .tree-indent {
+            margin-left: 20px;
+        }
+        
+        .file-icon {
+            display: inline-block;
+            width: 16px;
+            text-align: center;
+            margin-right: 4px;
         }
     </style>
 </head>
 <body>
-    <h1>StroopApp</h1>
-    <p>A research-grade Android application for conducting Stroop tests.</p>
-    
-    <div class="download-section">
-        <h2>Download</h2>
-        <p>
-            <a href="https://github.com/uintent/StroopApp/releases/latest">
-                Download Latest APK
-            </a>
+    <div class="container">
+        <h1>🧠 StroopApp Repository</h1>
+        <p class="description">
+            A research-grade Android application for conducting Stroop tests with precise timing control and configurable parameters.
         </p>
+        
+        <div class="actions">
+            <a href="https://github.com/uintent/StroopApp" class="btn">View on GitHub</a>
+            <a href="https://github.com/uintent/StroopApp/releases/latest" class="btn btn-secondary">Download APK</a>
+            <a href="https://raw.githubusercontent.com/uintent/StroopApp/main/README.md" class="btn btn-secondary">View README</a>
+        </div>
+        
+        <h2>📁 Repository Files</h2>
+        
+        <div class="expand-all">
+            <button onclick="expandAll()">Expand All</button>
+            <button onclick="collapseAll()">Collapse All</button>
+            <button onclick="refreshTree()">Refresh</button>
+        </div>
+        
+        <div id="file-tree" class="tree-container">
+            <div class="loading">Loading repository structure...</div>
+        </div>
+        
+        <div id="stats" class="stats"></div>
     </div>
     
-    <h2>Features</h2>
-    <ul class="features">
-        <li>Configurable Stroop test parameters</li>
-        <li>Multiple task sequences</li>
-        <li>Precise timing control</li>
-        <li>Export results for analysis</li>
-    </ul>
-    
-    <h2>Installation</h2>
-    <ol>
-        <li>Download the APK file</li>
-        <li>Enable "Install from Unknown Sources" in Android settings</li>
-        <li>Install the APK</li>
-    </ol>
-    
-    <h2>Source Code</h2>
-    <p>
-        View the source code on 
-        <a href="https://github.com/uintent/StroopApp">GitHub</a>
-    </p>
+    <div id="error-container"></div>
+
+    <script>
+        const REPO_OWNER = 'uintent';
+        const REPO_NAME = 'StroopApp';
+        const BRANCH = 'main'; // or 'master' if that's your default branch
+        
+        let fileCount = 0;
+        let folderCount = 0;
+        
+        async function fetchRepoTree() {
+            try {
+                const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`);
+                
+                if (!response.ok) {
+                    throw new Error(`GitHub API responded with ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.tree;
+            } catch (error) {
+                showError(`Failed to load repository structure: ${error.message}`);
+                return [];
+            }
+        }
+        
+        function buildTree(items) {
+            const root = {};
+            fileCount = 0;
+            folderCount = 0;
+            
+            // Build tree structure
+            items.forEach(item => {
+                const parts = item.path.split('/');
+                let current = root;
+                
+                parts.forEach((part, index) => {
+                    if (!current[part]) {
+                        current[part] = {
+                            type: index === parts.length - 1 ? item.type : 'tree',
+                            sha: item.sha,
+                            size: item.size,
+                            children: {}
+                        };
+                    }
+                    if (index < parts.length - 1) {
+                        current = current[part].children;
+                    }
+                });
+                
+                if (item.type === 'blob') fileCount++;
+                else if (item.type === 'tree') folderCount++;
+            });
+            
+            return root;
+        }
+        
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'kt': '📄',
+                'java': '☕',
+                'xml': '📋',
+                'gradle': '🐘',
+                'json': '📊',
+                'md': '📝',
+                'txt': '📃',
+                'properties': '⚙️',
+                'yml': '⚙️',
+                'yaml': '⚙️',
+                'png': '🖼️',
+                'jpg': '🖼️',
+                'jpeg': '🖼️',
+                'gif': '🖼️',
+                'svg': '🖼️',
+                'sh': '📜',
+                'bat': '📜',
+                'gitignore': '🚫',
+                'license': '📜'
+            };
+            return icons[ext] || '📄';
+        }
+        
+        function renderTree(tree, path = '') {
+            let html = '';
+            const entries = Object.entries(tree).sort((a, b) => {
+                // Folders first, then files
+                if (a[1].type === 'tree' && b[1].type !== 'tree') return -1;
+                if (a[1].type !== 'tree' && b[1].type === 'tree') return 1;
+                return a[0].localeCompare(b[0]);
+            });
+            
+            entries.forEach(([name, item]) => {
+                const fullPath = path ? `${path}/${name}` : name;
+                
+                if (item.type === 'tree') {
+                    html += `
+                        <details open>
+                            <summary class="tree-item folder">
+                                <span class="file-icon">📁</span>${name}/
+                            </summary>
+                            <div class="tree-indent">
+                                ${renderTree(item.children, fullPath)}
+                            </div>
+                        </details>
+                    `;
+                } else {
+                    const fileUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${fullPath}`;
+                    const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${fullPath}`;
+                    const size = item.size ? ` (${formatFileSize(item.size)})` : '';
+                    
+                    html += `
+                        <div class="tree-item file">
+                            <span class="file-icon">${getFileIcon(name)}</span>
+                            <a href="${fileUrl}" target="_blank" title="View on GitHub">${name}</a>
+                            <span style="color: #586069; font-size: 12px;">${size}</span>
+                            <a href="${rawUrl}" target="_blank" style="margin-left: 8px; font-size: 12px;" title="View raw">[raw]</a>
+                        </div>
+                    `;
+                }
+            });
+            
+            return html;
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+        
+        function showError(message) {
+            document.getElementById('error-container').innerHTML = `
+                <div class="container error">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+        
+        function expandAll() {
+            document.querySelectorAll('details').forEach(detail => {
+                detail.open = true;
+            });
+        }
+        
+        function collapseAll() {
+            document.querySelectorAll('details').forEach(detail => {
+                detail.open = false;
+            });
+        }
+        
+        async function refreshTree() {
+            document.getElementById('file-tree').innerHTML = '<div class="loading">Loading repository structure...</div>';
+            await loadRepositoryTree();
+        }
+        
+        async function loadRepositoryTree() {
+            const items = await fetchRepoTree();
+            
+            if (items.length === 0) {
+                document.getElementById('file-tree').innerHTML = '<div class="error">No files found or unable to load repository.</div>';
+                return;
+            }
+            
+            const tree = buildTree(items);
+            const treeHtml = renderTree(tree);
+            
+            document.getElementById('file-tree').innerHTML = treeHtml;
+            document.getElementById('stats').innerHTML = `
+                <span>📁 ${folderCount} folders</span>
+                <span>📄 ${fileCount} files</span>
+                <span>🔗 <a href="https://github.com/${REPO_OWNER}/${REPO_NAME}" target="_blank">View on GitHub</a></span>
+            `;
+        }
+        
+        // Load tree on page load
+        loadRepositoryTree();
+    </script>
 </body>
 </html>
