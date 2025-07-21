@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StroopApp - Repository Browser</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #24292e;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f6f8fa;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            padding: 30px;
+        }
+        
+        h1 {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .description {
+            color: #586069;
+            margin-bottom: 30px;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            background-color: #0366d6;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #0256c7;
+        }
+        
+        .btn-secondary {
+            background-color: #586069;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #4a5057;
+        }
+        
+        .tree-container {
+            background-color: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 14px;
+        }
+        
+        .tree-section {
+            margin-bottom: 20px;
+        }
+        
+        .folder-header {
+            color: #6f42c1;
+            font-weight: bold;
+            margin: 10px 0 5px 0;
+            font-size: 15px;
+        }
+        
+        .file-list {
+            margin-left: 20px;
+        }
+        
+        .file-item {
+            margin: 3px 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .file-icon {
+            display: inline-block;
+            width: 20px;
+            text-align: center;
+            margin-right: 6px;
+        }
+        
+        .file-link {
+            color: #0366d6;
+            text-decoration: none;
+            margin-right: 8px;
+        }
+        
+        .file-link:hover {
+            text-decoration: underline;
+        }
+        
+        .file-size {
+            color: #586069;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+        
+        .github-link {
+            color: #586069;
+            font-size: 12px;
+            text-decoration: none;
+        }
+        
+        .github-link:hover {
+            text-decoration: underline;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #586069;
+        }
+        
+        .error {
+            color: #cb2431;
+            padding: 20px;
+            background-color: #ffeef0;
+            border: 1px solid #ffdce0;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e4e8;
+            color: #586069;
+            font-size: 14px;
+        }
+        
+        .refresh-btn {
+            background: none;
+            border: 1px solid #e1e4e8;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #24292e;
+            margin-bottom: 15px;
+        }
+        
+        .refresh-btn:hover {
+            background-color: #f6f8fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 StroopApp Repository</h1>
+        <p class="description">
+            A research-grade Android application for conducting Stroop tests with precise timing control and configurable parameters.
+        </p>
+        
+        <div class="actions">
+            <a href="https://github.com/uintent/StroopApp" class="btn">View on GitHub</a>
+            <a href="https://github.com/uintent/StroopApp/releases/latest" class="btn btn-secondary">Download APK</a>
+            <a href="https://raw.githubusercontent.com/uintent/StroopApp/master/README.md" class="btn btn-secondary">View README</a>
+        </div>
+        
+        <h2>📁 Repository Files</h2>
+        
+        <button class="refresh-btn" onclick="loadRepository()">🔄 Refresh</button>
+        
+        <div id="file-tree" class="tree-container">
+            <div class="loading">Loading repository structure...</div>
+        </div>
+        
+        <div id="stats" class="stats"></div>
+    </div>
+    
+    <div id="error-container"></div>
+
+    <script>
+        const REPO_OWNER = 'uintent';
+        const REPO_NAME = 'StroopApp';
+        const BRANCH = 'master';
+        const BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}`;
+        
+        let fileCount = 0;
+        let folderCount = 0;
+        
+        async function fetchRepoTree() {
+            try {
+                const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${BRANCH}?recursive=1`);
+                
+                if (!response.ok) {
+                    throw new Error(`GitHub API responded with ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.tree;
+            } catch (error) {
+                showError(`Failed to load repository structure: ${error.message}`);
+                return [];
+            }
+        }
+        
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const icons = {
+                'kt': '📄',
+                'java': '☕',
+                'xml': '📋',
+                'gradle': '🐘',
+                'json': '📊',
+                'md': '📝',
+                'txt': '📃',
+                'properties': '⚙️',
+                'yml': '⚙️',
+                'yaml': '⚙️',
+                'png': '🖼️',
+                'jpg': '🖼️',
+                'jpeg': '🖼️',
+                'gif': '🖼️',
+                'svg': '🖼️',
+                'sh': '📜',
+                'bat': '📜',
+                'gitignore': '🚫',
+                'license': '📜',
+                'jar': '📦'
+            };
+            const lowerFilename = filename.toLowerCase();
+            if (lowerFilename === '.gitignore') return '🚫';
+            if (lowerFilename === 'license') return '📜';
+            return icons[ext] || '📄';
+        }
+        
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `(${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]})`;
+        }
+        
+        function organizeFiles(items) {
+            const organized = {};
+            fileCount = 0;
+            folderCount = 0;
+            
+            // First, organize files by directory
+            items.forEach(item => {
+                if (item.type === 'blob') {
+                    fileCount++;
+                    const parts = item.path.split('/');
+                    const filename = parts.pop();
+                    const directory = parts.join('/') || 'root';
+                    
+                    if (!organized[directory]) {
+                        organized[directory] = [];
+                    }
+                    
+                    organized[directory].push({
+                        name: filename,
+                        path: item.path,
+                        size: item.size
+                    });
+                } else if (item.type === 'tree') {
+                    folderCount++;
+                }
+            });
+            
+            // Sort directories and files within each directory
+            const sortedOrganized = {};
+            Object.keys(organized).sort().forEach(dir => {
+                sortedOrganized[dir] = organized[dir].sort((a, b) => a.name.localeCompare(b.name));
+            });
+            
+            return sortedOrganized;
+        }
+        
+        function generateStaticHTML(organizedFiles) {
+            let html = '';
+            
+            for (const [directory, files] of Object.entries(organizedFiles)) {
+                // Create folder header
+                const displayDir = directory === 'root' ? '📁 Root Files' : `📁 /${directory}/`;
+                html += `<div class="tree-section">`;
+                html += `<div class="folder-header">${displayDir}</div>`;
+                html += `<div class="file-list">`;
+                
+                // Add all files in this directory
+                files.forEach(file => {
+                    const rawUrl = `${BASE_URL}/${file.path}`;
+                    const githubUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/blob/${BRANCH}/${file.path}`;
+                    const icon = getFileIcon(file.name);
+                    const size = formatFileSize(file.size);
+                    
+                    html += `
+                        <div class="file-item">
+                            <span class="file-icon">${icon}</span>
+                            <a href="${rawUrl}" target="_blank" class="file-link" title="View raw file">${file.name}</a>
+                            <span class="file-size">${size}</span>
+                            <a href="${githubUrl}" target="_blank" class="github-link" title="View on GitHub">[github]</a>
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
+            }
+            
+            return html;
+        }
+        
+        function showError(message) {
+            document.getElementById('error-container').innerHTML = `
+                <div class="container error">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+        
+        async function loadRepository() {
+            // Show loading state
+            document.getElementById('file-tree').innerHTML = '<div class="loading">Loading repository structure...</div>';
+            document.getElementById('error-container').innerHTML = '';
+            
+            // Fetch repository tree
+            const items = await fetchRepoTree();
+            
+            if (items.length === 0) {
+                document.getElementById('file-tree').innerHTML = '<div class="error">No files found or unable to load repository.</div>';
+                return;
+            }
+            
+            // Organize files by directory
+            const organizedFiles = organizeFiles(items);
+            
+            // Generate static HTML
+            const html = generateStaticHTML(organizedFiles);
+            
+            // Write HTML to page
+            document.getElementById('file-tree').innerHTML = html;
+            
+            // Update stats
+            document.getElementById('stats').innerHTML = `
+                <span>📁 ${folderCount} folders</span>
+                <span>📄 ${fileCount} files</span>
+                <span>🔗 <a href="https://github.com/${REPO_OWNER}/${REPO_NAME}" target="_blank">View on GitHub</a></span>
+            `;
+        }
+        
+        // Load repository on page load
+        loadRepository();
+    </script>
+</body>
+</html>
