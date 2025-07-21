@@ -77,11 +77,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnExit.setOnClickListener {
             showExitConfirmation()
         }
-
-        // Exit button (when config loading failed)
-        binding.btnExit.setOnClickListener {
-            showExitConfirmation()
-        }
     }
 
     /**
