@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Stroop Research</string>
+
+    <!-- Task Selection Screen -->
+    <string name="task_selection_title">Select Task Sequence</string>
+    <string name="no_task_lists_found">No task sequences found in configuration</string>
+    <string name="select_sequence_prompt">Choose a task sequence to begin:</string>
+    <string name="settings_button">Settings</string>
+
+    <!-- Task Execution Screen (Between Tasks) -->
+    <string name="task_progress">Task %1$d of %2$d</string>
+    <string name="start_task">Start Task</string>
+    <string name="next_task">Next Task</string>
+    <string name="restart_task">Restart Task</string>
+    <string name="cancel_session">Cancel Session</string>
+    <string name="task_completed">Task Completed</string>
+    <string name="session_complete">Session Complete</string>
+    <string name="restart_session">Restart Entire Session</string>
+    <string name="return_to_main">Return to Main Menu</string>
+
+    <!-- Cancel Session Confirmation Dialog -->
+    <string name="cancel_session_title">Cancel Session</string>
+    <string name="cancel_session_message">This will cancel the current session and return to the main menu. All progress will be lost.</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_confirm">Confirm</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Timing Settings</string>
+    <string name="stroop_display_duration">Stroop Display Duration (ms)</string>
+    <string name="min_interval">Minimum Interval (ms)</string>
+    <string name="max_interval">Maximum Interval (ms)</string>
+    <string name="countdown_duration">Countdown Duration (seconds)</string>
+    <string name="reset_to_defaults">Reset to Defaults</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="settings_reset">Settings reset to defaults</string>
+    <string name="save_settings">Save</string>
+    <string name="back">Back</string>
+
+    <!-- Configuration Error Messages -->
+    <string name="config_error_title">Configuration Error</string>
+    <string name="config_file_missing">Configuration file \'research_config.json\' not found in assets folder.</string>
+    <string name="config_file_invalid">Configuration file contains invalid JSON format.</string>
+    <string name="config_missing_section">Missing required configuration section: %1$s</string>
+    <string name="config_invalid_colors">Invalid color configuration. At least 2 colors required and all must be valid hex codes.</string>
+    <string name="config_invalid_tasks">Invalid task configuration. All tasks must have positive timeout values.</string>
+    <string name="config_invalid_task_sequence">Invalid task sequence \'%1$s\'. Task ID \'%2$s\' does not exist in tasks configuration.</string>
+    <string name="config_invalid_timing">Invalid timing configuration. All timing values must be positive numbers.</string>
+    <string name="config_empty_task_sequence">Task sequence \'%1$s\' is empty or contains no valid tasks.</string>
+    <string name="error_ok">OK</string>
+
+    <!-- General -->
+    <string name="loading">Loading...</string>
+    <string name="error_generic">An error occurred. Please try again.</string>
+    <string name="countdown_0">0</string>
+    <string name="countdown_1">1</string>
+    <string name="countdown_2">2</string>
+    <string name="countdown_3">3</string>
+
+    <!-- Accessibility -->
+    <string name="settings_icon_description">Open timing settings</string>
+    <string name="stroop_display_area_description">Stroop stimulus display area</string>
+    <string name="task_controls_description">Task control buttons</string>
+</resources>

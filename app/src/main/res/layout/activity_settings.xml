@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    tools:context=".SettingsActivity">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/tv_title"
+        style="@style/ScreenTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="24dp"
+        android:text="@string/settings_title"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Settings Form Container -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/card_settings"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="4dp"
+        app:layout_constraintBottom_toTopOf="@+id/layout_action_buttons"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tv_title">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <!-- Form Header -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="24dp"
+                    android:gravity="center"
+                    android:text="Timing Configuration"
+                    android:textColor="@color/primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <!-- Stroop Display Duration -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/stroop_display_duration"
+                    style="@style/SettingsLabel" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_stroop_duration"
+                    style="@style/SettingsInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="milliseconds"
+                    app:endIconMode="clear_text"
+                    app:helperText="Duration each Stroop stimulus is displayed">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_stroop_duration"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLines="1"
+                        tools:text="2000" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Minimum Interval -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/min_interval"
+                    style="@style/SettingsLabel" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_min_interval"
+                    style="@style/SettingsInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="milliseconds"
+                    app:endIconMode="clear_text"
+                    app:helperText="Minimum time between Stroop stimuli">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_min_interval"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLines="1"
+                        tools:text="1000" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Maximum Interval -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/max_interval"
+                    style="@style/SettingsLabel" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_max_interval"
+                    style="@style/SettingsInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="milliseconds"
+                    app:endIconMode="clear_text"
+                    app:helperText="Maximum time between Stroop stimuli">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_max_interval"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLines="1"
+                        tools:text="3000" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Countdown Duration -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/countdown_duration"
+                    style="@style/SettingsLabel" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/til_countdown_duration"
+                    style="@style/SettingsInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="seconds"
+                    app:endIconMode="clear_text"
+                    app:helperText="Duration of countdown before Stroop display starts">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_countdown_duration"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLines="1"
+                        tools:text="4" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Current Values Preview -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:background="@color/surface_variant"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="Current Configuration Preview"
+                        android:textColor="@color/primary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_current_values"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/on_surface"
+                        android:textSize="12sp"
+                        tools:text="Stroop Display: 2000ms\nMin Interval: 1000ms\nMax Interval: 3000ms\nCountdown: 4s" />
+
+                </LinearLayout>
+
+                <!-- Validation Messages -->
+                <TextView
+                    android:id="@+id/tv_validation_message"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:background="@color/error_background"
+                    android:padding="12dp"
+                    android:textColor="@color/error"
+                    android:textSize="14sp"
+                    android:visibility="gone"
+                    tools:text="Minimum interval cannot be greater than maximum interval"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+        </ScrollView>
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:id="@+id/layout_action_buttons"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="24dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Reset to Defaults Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_reset_defaults"
+            style="@style/SecondaryActionButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="@string/reset_to_defaults"
+            app:icon="@drawable/ic_refresh" />
+
+        <!-- Save Settings Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            style="@style/PrimaryActionButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="@string/save_settings"
+            app:icon="@drawable/ic_save" />
+
+        <!-- Back Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back"
+            style="@style/TaskControlButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/back"
+            app:backgroundTint="@color/secondary"
+            app:icon="@drawable/ic_arrow_back" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

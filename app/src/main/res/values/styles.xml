@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base application theme -->
+    <!-- Base application theme -->
+    <style name="Theme.StroopApp" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/on_error</item>
+    </style>
+
+    <!-- Theme without action bar for most activities -->
+    <style name="Theme.StroopApp.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
+    </style>
+
+    <!-- Fullscreen theme for Stroop display -->
+    <style name="Theme.StroopApp.Fullscreen">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowBackground">@color/black</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@color/black</item>
+        <item name="android:navigationBarColor" tools:targetApi="21">@color/black</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
+    </style>
+
+    <!-- Stroop display text styles -->
+    <style name="StroopTextStyle">
+        <item name="android:textSize">72sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">center</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:lineSpacingExtra">0dp</item>
+    </style>
+
+    <!-- Countdown text styles -->
+    <style name="CountdownTextStyle">
+        <item name="android:textSize">120sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:gravity">center</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:lineSpacingExtra">0dp</item>
+    </style>
+
+    <!-- Task control buttons -->
+    <style name="TaskControlButton" parent="Widget.Material3.Button">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">56dp</item>
+        <item name="android:minWidth">120dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_margin">8dp</item>
+        <item name="android:elevation">4dp</item>
+    </style>
+
+    <!-- Primary action button (Start Task, Next Task) -->
+    <style name="PrimaryActionButton" parent="TaskControlButton">
+        <item name="android:backgroundTint">@color/primary</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:minWidth">140dp</item>
+    </style>
+
+    <!-- Secondary action button (Restart Task, Cancel Session) -->
+    <style name="SecondaryActionButton" parent="TaskControlButton">
+        <item name="android:backgroundTint">@color/secondary</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <!-- Destructive action button (Cancel Session) -->
+    <style name="DestructiveActionButton" parent="TaskControlButton">
+        <item name="android:backgroundTint">@color/error</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <!-- Task selection list item -->
+    <style name="TaskListItem">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">64dp</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <!-- Progress indicator text -->
+    <style name="ProgressIndicatorText">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="android:gravity">center</item>
+        <item name="android:padding">8dp</item>
+    </style>
+
+    <!-- Status text (Task Completed, Session Complete) -->
+    <style name="StatusText">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/primary</item>
+        <item name="android:gravity">center</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <!-- Settings form styles -->
+    <style name="SettingsLabel">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="android:layout_marginBottom">4dp</item>
+    </style>
+
+    <style name="SettingsInput" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="android:layout_marginBottom">16dp</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Settings button -->
+    <style name="SettingsIconButton" parent="Widget.Material3.Button.IconButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="iconTint">@color/on_surface</item>
+        <item name="iconSize">24dp</item>
+    </style>
+
+    <!-- Dialog styles -->
+    <style name="ConfirmationDialog" parent="ThemeOverlay.Material3.Dialog">
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="colorPrimary">@color/primary</item>
+    </style>
+
+    <!-- Error message styles -->
+    <style name="ErrorText">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">@color/error</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:gravity">center</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+    <!-- Title styles -->
+    <style name="ScreenTitle">
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="android:gravity">center</item>
+        <item name="android:padding">16dp</item>
+    </style>
+
+</resources>

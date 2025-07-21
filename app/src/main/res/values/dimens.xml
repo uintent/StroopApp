@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stroop Display Dimensions -->
+    <!-- 1cm margins as specified in requirements (approximately 38dp) -->
+    <dimen name="stroop_margin_horizontal">38dp</dimen>
+    <dimen name="stroop_margin_vertical">20dp</dimen>
+    
+    <!-- Stroop Text Sizing (Base sizes - will be calculated dynamically) -->
+    <dimen name="stroop_text_size_base">72sp</dimen>
+    <dimen name="stroop_text_size_max">120sp</dimen>
+    <dimen name="stroop_text_size_min">48sp</dimen>
+    
+    <!-- Countdown Text Sizing -->
+    <dimen name="countdown_text_size">120sp</dimen>
+    <dimen name="countdown_text_size_max">180sp</dimen>
+    <dimen name="countdown_text_size_min">80sp</dimen>
+    
+    <!-- Standard Margins and Padding -->
+    <dimen name="margin_tiny">4dp</dimen>
+    <dimen name="margin_small">8dp</dimen>
+    <dimen name="margin_medium">16dp</dimen>
+    <dimen name="margin_large">24dp</dimen>
+    <dimen name="margin_xlarge">32dp</dimen>
+    <dimen name="margin_xxlarge">48dp</dimen>
+    
+    <!-- Padding Dimensions -->
+    <dimen name="padding_tiny">4dp</dimen>
+    <dimen name="padding_small">8dp</dimen>
+    <dimen name="padding_medium">12dp</dimen>
+    <dimen name="padding_large">16dp</dimen>
+    <dimen name="padding_xlarge">24dp</dimen>
+    <dimen name="padding_xxlarge">32dp</dimen>
+    
+    <!-- Card and Surface Dimensions -->
+    <dimen name="card_corner_radius">8dp</dimen>
+    <dimen name="card_corner_radius_large">12dp</dimen>
+    <dimen name="card_elevation">4dp</dimen>
+    <dimen name="card_elevation_high">8dp</dimen>
+    
+    <!-- Button Dimensions -->
+    <dimen name="button_height_standard">48dp</dimen>
+    <dimen name="button_height_large">56dp</dimen>
+    <dimen name="button_height_xlarge">64dp</dimen>
+    <dimen name="button_min_width">88dp</dimen>
+    <dimen name="button_min_width_large">120dp</dimen>
+    <dimen name="button_corner_radius">4dp</dimen>
+    
+    <!-- Icon Dimensions -->
+    <dimen name="icon_size_small">16dp</dimen>
+    <dimen name="icon_size_medium">24dp</dimen>
+    <dimen name="icon_size_large">32dp</dimen>
+    <dimen name="icon_size_xlarge">48dp</dimen>
+    <dimen name="icon_size_xxlarge">64dp</dimen>
+    <dimen name="icon_size_huge">96dp</dimen>
+    
+    <!-- Text Sizes -->
+    <dimen name="text_size_caption">12sp</dimen>
+    <dimen name="text_size_body">14sp</dimen>
+    <dimen name="text_size_body_large">16sp</dimen>
+    <dimen name="text_size_title">18sp</dimen>
+    <dimen name="text_size_title_large">20sp</dimen>
+    <dimen name="text_size_headline">24sp</dimen>
+    <dimen name="text_size_display_small">28sp</dimen>
+    <dimen name="text_size_display_medium">32sp</dimen>
+    <dimen name="text_size_display_large">48sp</dimen>
+    
+    <!-- Layout Dimensions -->
+    <dimen name="divider_height">1dp</dimen>
+    <dimen name="divider_height_thick">2dp</dimen>
+    <dimen name="separator_height">8dp</dimen>
+    
+    <!-- Touch Target Dimensions (Accessibility) -->
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="touch_target_comfortable">56dp</dimen>
+    <dimen name="touch_target_large">64dp</dimen>
+    
+    <!-- Control Bar Dimensions -->
+    <dimen name="moderator_control_height_min">96dp</dimen>
+    <dimen name="moderator_control_height_preferred">120dp</dimen>
+    <dimen name="moderator_control_height_max">160dp</dimen>
+    
+    <!-- Progress Indicators -->
+    <dimen name="progress_size_small">24dp</dimen>
+    <dimen name="progress_size_medium">32dp</dimen>
+    <dimen name="progress_size_large">48dp</dimen>
+    <dimen name="progress_size_xlarge">64dp</dimen>
+    
+    <!-- Form Field Dimensions -->
+    <dimen name="text_field_height">56dp</dimen>
+    <dimen name="text_field_corner_radius">4dp</dimen>
+    <dimen name="text_field_stroke_width">1dp</dimen>
+    <dimen name="text_field_stroke_width_focused">2dp</dimen>
+    
+    <!-- List Item Dimensions -->
+    <dimen name="list_item_height_standard">56dp</dimen>
+    <dimen name="list_item_height_large">64dp</dimen>
+    <dimen name="list_item_height_xlarge">72dp</dimen>
+    
+    <!-- Screen Specific Dimensions -->
+    <!-- Task Selection Screen -->
+    <dimen name="task_selection_header_height">120dp</dimen>
+    <dimen name="task_selection_button_spacing">8dp</dimen>
+    
+    <!-- Task Execution Screen -->
+    <dimen name="stroop_display_area_min_height">400dp</dimen>
+    <dimen name="task_status_icon_size">64dp</dimen>
+    
+    <!-- Settings Screen -->
+    <dimen name="settings_form_width_max">600dp</dimen>
+    <dimen name="settings_input_spacing">16dp</dimen>
+    <dimen name="settings_section_spacing">24dp</dimen>
+    
+    <!-- Error and Empty States -->
+    <dimen name="empty_state_icon_size">64dp</dimen>
+    <dimen name="error_state_icon_size">64dp</dimen>
+    <dimen name="state_content_max_width">400dp</dimen>
+    
+    <!-- Overlay and Dialog Dimensions -->
+    <dimen name="dialog_corner_radius">8dp</dimen>
+    <dimen name="dialog_elevation">16dp</dimen>
+    <dimen name="overlay_alpha">0.8</dimen>
+    
+    <!-- Responsive Breakpoints (for reference) -->
+    <dimen name="breakpoint_compact">600dp</dimen>
+    <dimen name="breakpoint_medium">840dp</dimen>
+    <dimen name="breakpoint_expanded">1200dp</dimen>
+    
+    <!-- Research-Specific Dimensions -->
+    <dimen name="participant_viewing_distance">60dp</dimen> <!-- Optimal reading distance consideration -->
+    <dimen name="moderator_interaction_zone">120dp</dimen> <!-- Easy reach area -->
+    <dimen name="visual_separation_min">16dp</dimen> <!-- Clear component separation -->
+    
+    <!-- Animation and Transition Dimensions -->
+    <dimen name="elevation_resting">2dp</dimen>
+    <dimen name="elevation_raised">8dp</dimen>
+    <dimen name="elevation_dragged">16dp</dimen>
+    
+    <!-- Status Indicator Dimensions -->
+    <dimen name="status_indicator_size">8dp</dimen>
+    <dimen name="status_indicator_size_large">12dp</dimen>
+    
+    <!-- Emergency Control Dimensions -->
+    <dimen name="emergency_control_size">80dp</dimen>
+    <dimen name="emergency_control_margin">16dp</dimen>
+    
+</resources>

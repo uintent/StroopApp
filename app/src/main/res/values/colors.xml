@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Default Android colors (add these to fix errors) -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+
+
+    <!-- Primary App Colors (Research-appropriate blue theme) -->
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#0D47A1</color>
+    <color name="primary_light">#BBDEFB</color>
+    
+    <!-- Secondary Colors -->
+    <color name="secondary">#455A64</color>
+    <color name="secondary_dark">#263238</color>
+    <color name="secondary_light">#B0BEC5</color>
+    
+    <!-- Surface and Background Colors -->
+    <color name="background">#FAFAFA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_variant">#F5F5F5</color>
+    <color name="surface_overlay">#E0F0F0F0</color>
+    
+    <!-- Text Colors -->
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="on_background">#212121</color>
+    <color name="on_surface">#212121</color>
+    
+    <!-- Error Colors -->
+    <color name="error">#D32F2F</color>
+    <color name="error_dark">#B71C1C</color>
+    <color name="error_background">#FFEBEE</color>
+    <color name="on_error">#FFFFFF</color>
+    
+    <!-- Success Colors -->
+    <color name="success">#388E3C</color>
+    <color name="success_light">#C8E6C9</color>
+    <color name="on_success">#FFFFFF</color>
+    
+    <!-- Warning Colors -->
+    <color name="warning">#F57C00</color>
+    <color name="warning_light">#FFE0B2</color>
+    <color name="on_warning">#FFFFFF</color>
+    
+    <!-- Basic Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="transparent">#00000000</color>
+    
+    <!-- Stroop Display Colors -->
+    <!-- These are example colors - actual colors will come from JSON config -->
+    <!-- Used for testing and fallback scenarios -->
+    <color name="stroop_red">#FF0000</color>
+    <color name="stroop_blue">#0000FF</color>
+    <color name="stroop_green">#00FF00</color>
+    <color name="stroop_yellow">#FFFF00</color>
+    <color name="stroop_black">#000000</color>
+    <color name="stroop_brown">#8B4513</color>
+    <color name="stroop_orange">#FF8000</color>
+    <color name="stroop_purple">#800080</color>
+    
+    <!-- UI State Colors -->
+    <color name="divider">#E0E0E0</color>
+    <color name="disabled">#BDBDBD</color>
+    <color name="pressed">#E1F5FE</color>
+    <color name="selected">#E3F2FD</color>
+    
+    <!-- Card and Elevation Colors -->
+    <color name="card_background">#FFFFFF</color>
+    <color name="elevation_overlay">#0A000000</color>
+    
+    <!-- Button State Colors -->
+    <color name="button_primary_pressed">#1565C0</color>
+    <color name="button_secondary_pressed">#37474F</color>
+    <color name="button_error_pressed">#C62828</color>
+    
+    <!-- Text Field Colors -->
+    <color name="text_field_background">#F5F5F5</color>
+    <color name="text_field_stroke">#E0E0E0</color>
+    <color name="text_field_stroke_focused">#1976D2</color>
+    <color name="text_field_error">#D32F2F</color>
+    
+    <!-- Progress Indicator -->
+    <color name="progress_background">#E0E0E0</color>
+    <color name="progress_indicator">#1976D2</color>
+    
+    <!-- Research-specific Colors -->
+    <color name="moderator_control_background">#F8F9FA</color>
+    <color name="participant_area_background">#FFFFFF</color>
+    <color name="countdown_background">#000000</color>
+    <color name="countdown_text">#FFFFFF</color>
+    <color name="stroop_background">#FFFFFF</color>
+    <color name="interval_background">#FFFFFF</color>
+    
+    <!-- Status Indicator Colors -->
+    <color name="status_ready">#4CAF50</color>
+    <color name="status_active">#FF9800</color>
+    <color name="status_complete">#2196F3</color>
+    <color name="status_error">#F44336</color>
+    
+    <!-- Accessibility Colors (High Contrast) -->
+    <color name="high_contrast_text">#000000</color>
+    <color name="high_contrast_background">#FFFFFF</color>
+    <color name="focus_indicator">#FF6F00</color>
+    
+</resources>

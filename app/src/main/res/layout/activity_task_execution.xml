@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    tools:context=".TaskExecutionActivity">
+
+    <!-- Upper Area: Stroop Display Area (Participant-facing) -->
+    <View
+        android:id="@+id/stroop_display_area"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/black"
+        android:contentDescription="@string/stroop_display_area_description"
+        app:layout_constraintBottom_toTopOf="@+id/divider"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Stroop Display Area Content (shown when not in active display) -->
+    <LinearLayout
+        android:id="@+id/layout_stroop_content"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        app:layout_constraintBottom_toTopOf="@+id/divider"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Task Status Icon -->
+        <ImageView
+            android:id="@+id/iv_task_status"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginBottom="24dp"
+            android:contentDescription="Task status"
+            android:src="@drawable/ic_task_waiting"
+            app:tint="@color/white" />
+
+        <!-- Task Status Text -->
+        <TextView
+            android:id="@+id/tv_task_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/task_completed"
+            android:textColor="@color/white"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            tools:text="Task Completed" />
+
+    </LinearLayout>
+
+    <!-- Divider between Stroop area and controls -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="0dp"
+        android:layout_height="2dp"
+        android:background="@color/primary"
+        app:layout_constraintBottom_toTopOf="@+id/layout_moderator_controls"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Lower Area: Moderator Controls (Compact control bar) -->
+    <LinearLayout
+        android:id="@+id/layout_moderator_controls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/surface"
+        android:contentDescription="@string/task_controls_description"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:minHeight="120dp"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Progress and Status Section -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingEnd="16dp"
+            android:paddingStart="8dp">
+
+            <!-- Progress Indicator -->
+            <TextView
+                android:id="@+id/tv_progress"
+                style="@style/ProgressIndicatorText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                tools:text="Task 2 of 4" />
+
+            <!-- Task Status Message -->
+            <TextView
+                android:id="@+id/tv_status_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface"
+                android:textSize="14sp"
+                android:visibility="gone"
+                tools:text="Ready to start task"
+                tools:visibility="visible" />
+
+        </LinearLayout>
+
+        <!-- Control Buttons Section -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <!-- Primary Action Button (Start Task / Next Task) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_primary_action"
+                style="@style/PrimaryActionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/start_task"
+                tools:text="Start Task" />
+
+            <!-- Secondary Action Button (Restart Task) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_secondary_action"
+                style="@style/SecondaryActionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="@string/restart_task"
+                android:visibility="gone"
+                tools:text="Restart Task"
+                tools:visibility="visible" />
+
+            <!-- Cancel Session Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_cancel_session"
+                style="@style/DestructiveActionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/cancel_session" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Session Complete Overlay -->
+    <LinearLayout
+        android:id="@+id/layout_session_complete"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/surface_overlay"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/layout_moderator_controls"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:visibility="visible">
+
+        <!-- Success Icon -->
+        <ImageView
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginBottom="24dp"
+            android:contentDescription="Session complete"
+            android:src="@drawable/ic_check_circle"
+            app:tint="@color/primary" />
+
+        <!-- Session Complete Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:gravity="center"
+            android:text="@string/session_complete"
+            android:textColor="@color/on_surface"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <!-- Session Complete Actions -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <!-- Restart Session Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_restart_session"
+                style="@style/PrimaryActionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/restart_session" />
+
+            <!-- Restart Last Task Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_restart_last_task"
+                style="@style/SecondaryActionButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="16dp"
+                android:text="@string/restart_task" />
+
+            <!-- Return to Main Menu Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_return_to_main"
+                style="@style/TaskControlButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/return_to_main"
+                app:backgroundTint="@color/secondary" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

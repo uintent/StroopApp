@@ -1,0 +1,260 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="#FFFFFF"
+    tools:context=".TaskSelectionActivity">
+
+    <!-- Left Side: Header and Config Management -->
+    <LinearLayout
+        android:id="@+id/layout_left_panel"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.35"
+        android:layout_margin="16dp"
+        android:orientation="vertical">
+
+        <!-- Header Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Title -->
+            <TextView
+                android:id="@+id/tv_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Task Selection"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="#000000" />
+
+            <!-- Settings Button -->
+            <Button
+                android:id="@+id/btn_settings"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:text="⚙"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
+        <!-- Instructions Text -->
+        <TextView
+            android:id="@+id/tv_instructions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="start"
+            android:text="Select a task sequence to begin:"
+            android:textColor="#666666"
+            android:textSize="14sp" />
+
+        <!-- Config Management Section -->
+        <LinearLayout
+            android:id="@+id/layout_config_management"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:background="#F5F5F5"
+            android:padding="12dp">
+
+            <!-- Config Source Display -->
+            <TextView
+                android:id="@+id/tv_config_source"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:alpha="0.7"
+                android:textColor="#666666"
+                android:visibility="gone"
+                android:maxLines="2"
+                android:ellipsize="end"
+                tools:text="Config: External Storage"
+                tools:visibility="visible" />
+
+            <!-- Config Management Buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical">
+
+                <!-- Export/Update Config Button -->
+                <Button
+                    android:id="@+id/btn_export_config"
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:layout_marginBottom="4dp"
+                    android:text="Export Config"
+                    android:textSize="11sp"
+                    android:enabled="false" />
+
+                <!-- Reload Config Button -->
+                <Button
+                    android:id="@+id/btn_reload_config"
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:layout_marginBottom="4dp"
+                    android:text="Reload Config"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    android:enabled="false"
+                    tools:visibility="visible" />
+
+                <!-- Config Info Button -->
+                <Button
+                    android:id="@+id/btn_config_info"
+                    android:layout_width="match_parent"
+                    android:layout_height="32dp"
+                    android:text="Config Info"
+                    android:textSize="11sp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Right Side: Task Sequence List -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0.65"
+        android:layout_margin="16dp"
+        android:orientation="vertical"
+        android:background="#F0F0F0"
+        android:padding="1dp">
+
+        <!-- Task List Header -->
+        <TextView
+            android:id="@+id/tv_list_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#2196F3"
+            android:gravity="center"
+            android:padding="10dp"
+            android:text="Available Task Sequences"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- Task List Container -->
+        <FrameLayout
+            android:id="@+id/card_task_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#FFFFFF">
+
+            <!-- Scrollable Task List -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:id="@+id/layout_task_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <!-- Task list items will be added programmatically -->
+
+                </LinearLayout>
+
+            </ScrollView>
+
+            <!-- Loading Indicator -->
+            <ProgressBar
+                android:id="@+id/progress_loading"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- Error Message Container -->
+            <LinearLayout
+                android:id="@+id/layout_error"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_margin="24dp"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <!-- Error Title -->
+                <TextView
+                    android:id="@+id/tv_error_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:text="Configuration Error"
+                    android:textColor="#F44336"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <!-- Error Message -->
+                <TextView
+                    android:id="@+id/tv_error_message"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:textSize="14sp"
+                    android:gravity="center"
+                    android:textColor="#F44336"
+                    tools:text="Configuration file not found." />
+
+                <!-- OK Button -->
+                <Button
+                    android:id="@+id/btn_error_ok"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OK"
+                    android:backgroundTint="#F44336"
+                    android:textColor="#FFFFFF" />
+
+            </LinearLayout>
+
+            <!-- Empty State Message -->
+            <LinearLayout
+                android:id="@+id/layout_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_margin="24dp"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp"
+                android:visibility="gone">
+
+                <!-- Empty Message -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="No task sequences found"
+                    android:textColor="#666666"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
