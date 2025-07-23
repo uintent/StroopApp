@@ -38,7 +38,8 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            startDiscovery()
+            // Don't auto-start discovery anymore
+            // startDiscovery()
         } else {
             showPermissionError()
         }
@@ -74,21 +75,31 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         // Set up click listeners
         setupClickListeners()
 
-        // Check permissions and start discovery
-        binding.root.postDelayed({
-            checkPermissionsAndStartDiscovery()
-        }, 2000)
+        // Load last connection immediately
+        loadLastConnection()
 
-        // Add permission check
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-                Log.d("MasterNetwork", "Requesting location permission")
-                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1)
-            } else {
-                Log.d("MasterNetwork", "Location permission already granted")
+        // Don't auto-start discovery - just check permissions
+        checkPermissions()
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        // Don't auto-start discovery
+        // networkClient.startDiscovery()
+
+        // Update connection state UI
+        lifecycleScope.launch {
+            networkClient.connectionState.collect { state ->
+                updateConnectionState(state)
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Stop discovery when activity is paused to free up resources
+        networkClient.stopDiscovery()
     }
 
     override fun onRequestPermissionsResult(
@@ -99,8 +110,8 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.d("MasterNetwork", "Location permission granted, restarting discovery")
-                refreshDiscovery()
+                Log.d("MasterNetwork", "Location permission granted")
+                // Don't auto-start discovery
             } else {
                 Log.e("MasterNetwork", "Location permission denied")
             }
@@ -199,6 +210,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             imm.hideSoftInputFromWindow(view.windowToken, 0)
         }
 
+        // Stop discovery to free up resources
+        networkClient.stopDiscovery()
+
         // Create manual device entry
         val manualDevice = MasterNetworkClient.DiscoveredDevice(
             serviceName = "Manual_${ipAddress}_$port",
@@ -221,6 +235,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 // Start session
                 val sessionId = networkClient.startSession()
                 Log.d("MasterNetwork", "Session started with ID: $sessionId")
+
+                // Navigate to ColorDisplayActivity
+                startActivity(Intent(this@DeviceDiscoveryActivity, ColorDisplayActivity::class.java))
             } else {
                 Log.e("MasterNetwork", "Manual connection failed")
                 Snackbar.make(
@@ -298,10 +315,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkPermissionsAndStartDiscovery() {
-        // Load last successful connection
-        loadLastConnection()
-
+    private fun checkPermissions() {
         // On Android 12+ we need location permission for NSD
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             when {
@@ -309,14 +323,14 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     this,
                     Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    startDiscovery()
+                    // Permission granted, but don't auto-start discovery
+                    Log.d("MasterNetwork", "Location permission already granted")
                 }
                 else -> {
+                    // Request permission
                     locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
             }
-        } else {
-            startDiscovery()
         }
     }
 

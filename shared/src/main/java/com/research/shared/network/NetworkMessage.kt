@@ -8,46 +8,8 @@ import kotlinx.serialization.json.Json
  */
 @Serializable
 sealed class NetworkMessage {
-    abstract val messageType: MessageType
     abstract val sessionId: String
     abstract val timestamp: Long
-}
-
-/**
- * Message types for network communication
- */
-@Serializable
-enum class MessageType {
-    // Connection messages
-    HANDSHAKE,
-    HANDSHAKE_RESPONSE,
-    HEARTBEAT,
-    DISCONNECT,
-
-    // Task control messages
-    START_TASK,
-    END_TASK,
-    PAUSE_TASK,
-    RESUME_TASK,
-
-    // Stroop control messages
-    START_COUNTDOWN,
-    START_STROOP_SEQUENCE,
-    STOP_STROOP_SEQUENCE,
-
-    STROOP_DISPLAY,      // When a Stroop is shown
-    START_STROOP,        // Command to start showing Stroops
-    STOP_STROOP,         // Command to stop showing Stroops
-    STROOP_HIDDEN,       // When a Stroop is hidden
-
-    // Data messages
-    STROOP_RESULTS,
-    TASK_STATUS,
-    ERROR,
-
-    // Settings messages
-    UPDATE_SETTINGS,
-    REQUEST_STATUS
 }
 
 // Connection Messages
@@ -58,9 +20,7 @@ data class HandshakeMessage(
     override val timestamp: Long = System.currentTimeMillis(),
     val masterDeviceId: String,
     val masterVersion: String
-) : NetworkMessage() {
-    override val messageType = MessageType.HANDSHAKE
-}
+) : NetworkMessage()
 
 @Serializable
 data class HandshakeResponseMessage(
@@ -69,17 +29,13 @@ data class HandshakeResponseMessage(
     val projectorDeviceId: String,
     val projectorVersion: String,
     val isReady: Boolean
-) : NetworkMessage() {
-    override val messageType = MessageType.HANDSHAKE_RESPONSE
-}
+) : NetworkMessage()
 
 @Serializable
 data class HeartbeatMessage(
     override val sessionId: String,
     override val timestamp: Long = System.currentTimeMillis()
-) : NetworkMessage() {
-    override val messageType = MessageType.HEARTBEAT
-}
+) : NetworkMessage()
 
 // Task Control Messages
 
@@ -91,9 +47,7 @@ data class StartTaskMessage(
     val taskLabel: String,
     val timeoutSeconds: Int,
     val stroopSettings: StroopSettings
-) : NetworkMessage() {
-    override val messageType = MessageType.START_TASK
-}
+) : NetworkMessage()
 
 @Serializable
 data class EndTaskMessage(
@@ -101,9 +55,7 @@ data class EndTaskMessage(
     override val timestamp: Long = System.currentTimeMillis(),
     val taskId: String,
     val reason: EndReason
-) : NetworkMessage() {
-    override val messageType = MessageType.END_TASK
-}
+) : NetworkMessage()
 
 @Serializable
 enum class EndReason {
@@ -112,6 +64,8 @@ enum class EndReason {
     CANCELLED,
     ERROR
 }
+
+// Stroop Messages are defined in StroopMessages.kt
 
 // Stroop Settings
 
@@ -138,8 +92,6 @@ data class StroopResultsMessage(
     val averageReactionTimeMs: Long,
     val individualResults: List<StroopResult>
 ) : NetworkMessage() {
-    override val messageType = MessageType.STROOP_RESULTS
-
     val errorRateCorrect: Float
         get() = if (totalStroops > 0) correctResponses.toFloat() / totalStroops else 0f
 
@@ -164,9 +116,7 @@ data class TaskStatusMessage(
     val taskId: String,
     val status: TaskStatus,
     val elapsedTimeMs: Long
-) : NetworkMessage() {
-    override val messageType = MessageType.TASK_STATUS
-}
+) : NetworkMessage()
 
 @Serializable
 enum class TaskStatus {
@@ -185,9 +135,7 @@ data class ErrorMessage(
     val errorCode: String,
     val errorDescription: String,
     val isFatal: Boolean
-) : NetworkMessage() {
-    override val messageType = MessageType.ERROR
-}
+) : NetworkMessage()
 
 // Network utilities
 
@@ -196,7 +144,7 @@ object NetworkProtocol {
         prettyPrint = true
         ignoreUnknownKeys = true
         encodeDefaults = true
-        classDiscriminator = "messageType"
+        // Use default discriminator "type" for polymorphic serialization
     }
 
     /**

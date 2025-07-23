@@ -13,9 +13,7 @@ data class StroopDisplayMessage(
     val displayColor: String,      // The color it's displayed in (hex format, e.g., "#FF0000")
     val correctAnswer: String,     // What the participant should say (the color name)
     val displayTime: Long = System.currentTimeMillis()
-) : NetworkMessage() {
-    override val messageType = MessageType.STROOP_DISPLAY
-}
+) : NetworkMessage()
 
 /**
  * Command to start displaying Stroop stimuli
@@ -28,9 +26,7 @@ data class StartStroopCommand(
     val displayDuration: Int = 2000,  // milliseconds
     val minInterval: Int = 1000,      // milliseconds
     val maxInterval: Int = 3000       // milliseconds
-) : NetworkMessage() {
-    override val messageType = MessageType.START_STROOP
-}
+) : NetworkMessage()
 
 /**
  * Command to stop displaying Stroop stimuli
@@ -40,9 +36,7 @@ data class StopStroopCommand(
     override val sessionId: String,
     override val timestamp: Long = System.currentTimeMillis(),
     val taskId: String
-) : NetworkMessage() {
-    override val messageType = MessageType.STOP_STROOP
-}
+) : NetworkMessage()
 
 /**
  * Message sent when a Stroop stimulus disappears
@@ -52,6 +46,4 @@ data class StroopHiddenMessage(
     override val sessionId: String,
     override val timestamp: Long = System.currentTimeMillis(),
     val hiddenTime: Long = System.currentTimeMillis()
-) : NetworkMessage() {
-    override val messageType = MessageType.STROOP_HIDDEN
-}
+) : NetworkMessage()

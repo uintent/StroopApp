@@ -174,8 +174,7 @@ class MasterNetworkClient(
             socket = Socket().apply {
                 tcpNoDelay = true
                 keepAlive = true
-                // Don't set soTimeout here - it causes read timeouts!
-                soTimeout = NetworkConstants.SOCKET_TIMEOUT_MS  // REMOVE THIS LINE
+                // Remove the soTimeout line as suggested in the comment
             }
 
             val address = InetSocketAddress(device.host, device.port)
@@ -186,8 +185,13 @@ class MasterNetworkClient(
             connectedDevice = device
             _connectionState.value = ConnectionState.CONNECTED
 
-            // Start message handling
-            handleConnection()
+            // Start message handling in a new coroutine (don't wait for it)
+            scope.launch {
+                handleConnection()
+            }
+
+            // Give the connection a moment to stabilize
+            delay(100)
 
             return@withContext true
 
@@ -428,7 +432,7 @@ class MasterNetworkClient(
 
             currentSessionId?.let { sessionId ->
                 try {
-                    Log.d(TAG, "Sending heartbeat for session: $sessionId")
+                    // Log.d(TAG, "Sending heartbeat for session: $sessionId")
                     sendMessage(HeartbeatMessage(sessionId = sessionId))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to send heartbeat", e)

@@ -7,6 +7,9 @@ import androidx.lifecycle.lifecycleScope
 import com.research.master.databinding.ActivityColorDisplayBinding
 import com.research.master.network.NetworkManager
 import com.research.shared.network.StroopDisplayMessage
+import com.research.shared.network.StroopHiddenMessage
+import com.research.shared.network.HeartbeatMessage
+import com.research.shared.network.HandshakeResponseMessage
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -26,8 +29,8 @@ class ColorDisplayActivity : AppCompatActivity() {
         binding = ActivityColorDisplayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Set up toolbar
-        setSupportActionBar(binding.toolbar)
+        // Remove toolbar setup - use default action bar instead
+        // setSupportActionBar(binding.toolbar)
         supportActionBar?.title = "Stroop Color Monitor"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -52,15 +55,29 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun observeNetworkMessages() {
         lifecycleScope.launch {
             networkClient.receiveMessages().collectLatest { message ->
-                Log.d("ColorDisplay", "Received message: $message")
+                // Only process messages if activity is resumed
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                    Log.d("ColorDisplay", "Received message: $message")
 
-                when (message) {
-                    is StroopDisplayMessage -> {
-                        handleStroopDisplay(message)
+                    when (message) {
+                        is StroopDisplayMessage -> {
+                            handleStroopDisplay(message)
+                        }
+                        is StroopHiddenMessage -> {
+                            handleStroopHidden()
+                        }
+                        is HeartbeatMessage -> {
+                            // Ignore heartbeats - they're just for connection monitoring
+                        }
+                        is HandshakeResponseMessage -> {
+                            // Ignore handshake responses - they're handled by the connection logic
+                        }
+                        else -> {
+                            Log.d("ColorDisplay", "Unhandled message type: ${message::class.simpleName}")
+                        }
                     }
-                    else -> {
-                        Log.d("ColorDisplay", "Unhandled message type: ${message.messageType}")
-                    }
+                } else {
+                    Log.d("ColorDisplay", "Activity not resumed, ignoring message: ${message::class.simpleName}")
                 }
             }
         }
@@ -69,23 +86,26 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
         Log.d("ColorDisplay", "Stroop displayed: word=${message.word}, color=${message.displayColor}")
 
-        runOnUiThread {
-            // Update the color display
-            try {
-                val color = Color.parseColor(message.displayColor)
-                binding.viewColorDisplay.setBackgroundColor(color)
+        // Already on UI thread from lifecycleScope.launch, no need for runOnUiThread
+        try {
+            val color = Color.parseColor(message.displayColor)
+            Log.d("ColorDisplay", "Parsed color: $color")
 
-                // Update text information
-                binding.tvColorInfo.text = "Word: ${message.word}\nColor: ${message.displayColor}"
-                binding.tvStatus.text = "Stroop Active"
+            binding.viewColorDisplay.setBackgroundColor(color)
+            Log.d("ColorDisplay", "Set background color")
 
-                // Show correct answer (what participant should say)
-                binding.tvCorrectAnswer.text = "Correct Answer: ${message.correctAnswer}"
+            // Update text information
+            binding.tvColorInfo.text = "Word: ${message.word}\nColor: ${message.displayColor}"
+            binding.tvStatus.text = "Stroop Active"
 
-            } catch (e: Exception) {
-                Log.e("ColorDisplay", "Error parsing color: ${message.displayColor}", e)
-                binding.tvStatus.text = "Error: Invalid color format"
-            }
+            // Show correct answer (what participant should say)
+            binding.tvCorrectAnswer.text = "Correct Answer: ${message.correctAnswer}"
+
+            Log.d("ColorDisplay", "UI update complete")
+
+        } catch (e: Exception) {
+            Log.e("ColorDisplay", "Error parsing color: ${message.displayColor}", e)
+            binding.tvStatus.text = "Error: Invalid color format"
         }
     }
 
@@ -119,6 +139,11 @@ class ColorDisplayActivity : AppCompatActivity() {
                 binding.tvStatus.text = "Error: ${e.message}"
             }
         }
+    }
+
+    private fun handleStroopHidden() {
+        Log.d("ColorDisplay", "Stroop hidden")
+        showWaitingForStroop()
     }
 
     override fun onSupportNavigateUp(): Boolean {
