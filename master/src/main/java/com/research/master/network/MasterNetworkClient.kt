@@ -428,6 +428,7 @@ class MasterNetworkClient(
 
             currentSessionId?.let { sessionId ->
                 try {
+                    Log.d(TAG, "Sending heartbeat for session: $sessionId")
                     sendMessage(HeartbeatMessage(sessionId = sessionId))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to send heartbeat", e)

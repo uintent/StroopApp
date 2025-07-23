@@ -11,6 +11,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.research.projector.databinding.ActivityMainBinding
 import com.research.projector.network.ProjectorNetworkService
+import com.research.projector.network.ProjectorNetworkManager
 import com.research.projector.viewmodels.ConfigState
 import com.research.projector.viewmodels.TaskSelectionViewModel
 import kotlinx.coroutines.launch
@@ -103,9 +104,8 @@ class MainActivity : AppCompatActivity() {
     private fun initializeNetworkService() {
         android.util.Log.d("ProjectorApp", "Initializing network service")
 
-        // Create network service
-        networkService = ProjectorNetworkService(this)
-        networkService.start()
+        // Create network service using singleton
+        networkService = ProjectorNetworkManager.getNetworkService(this)
 
         // Observe connection state
         lifecycleScope.launch {
@@ -298,7 +298,8 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
-        android.util.Log.d("ProjectorApp", "Stopping network service")
-        networkService.stop()
+        android.util.Log.d("ProjectorApp", "MainActivity onDestroy - keeping network service running")
+        // Don't stop the network service here - let it continue running
+        // ProjectorNetworkManager.stop() // Only call this when app is completely shutting down
     }
 }

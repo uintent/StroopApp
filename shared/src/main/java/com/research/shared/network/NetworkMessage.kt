@@ -35,6 +35,11 @@ enum class MessageType {
     START_STROOP_SEQUENCE,
     STOP_STROOP_SEQUENCE,
 
+    STROOP_DISPLAY,      // When a Stroop is shown
+    START_STROOP,        // Command to start showing Stroops
+    STOP_STROOP,         // Command to stop showing Stroops
+    STROOP_HIDDEN,       // When a Stroop is hidden
+
     // Data messages
     STROOP_RESULTS,
     TASK_STATUS,
@@ -230,18 +235,4 @@ object NetworkProtocol {
             this.toByte()
         )
     }
-}
-
-/**
- * Constants for network communication
- */
-object NetworkConstants {
-    const val SERVICE_TYPE = "_drivertest._tcp."
-    const val SERVICE_NAME_PREFIX = "DriverDistraction"
-    const val DEFAULT_PORT = 0 // Let system assign
-    const val SOCKET_TIMEOUT_MS = 10_000
-    const val HEARTBEAT_INTERVAL_MS = 5_000L
-    const val RECONNECTION_DELAY_MS = 2_000L
-    const val DISCOVERY_TIMEOUT_MS = 30_000L
-    const val MAX_MESSAGE_SIZE = 1_048_576 // 1MB
 }

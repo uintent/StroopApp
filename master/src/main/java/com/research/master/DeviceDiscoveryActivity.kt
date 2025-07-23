@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
 import android.view.inputmethod.EditorInfo
+import android.content.Intent
 
 /**
  * Activity for discovering and connecting to Projector devices
@@ -50,8 +51,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Set up toolbar
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = "Connect to Projector"
+        //setSupportActionBar(binding.toolbar)
+        //supportActionBar?.title = "Connect to Projector"
+        binding.toolbar.title = "Connect to Projector"
 
         // Initialize network client using singleton
         networkClient = NetworkManager.getNetworkClient(this)
@@ -340,19 +342,12 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
     }
 
     private fun navigateToMain() {
-        // Navigate to main activity without destroying the connection
-        // TODO: Create and navigate to your main activity
-        // For now, just show a success message
-        Snackbar.make(
-            binding.root,
-            "Connected successfully! Ready to start tasks.",
-            Snackbar.LENGTH_LONG
-        ).show()
+        // Navigate to color display activity for testing
+        val intent = Intent(this, ColorDisplayActivity::class.java)
+        startActivity(intent)
 
-        // Uncomment and modify when you have your main activity:
-        // val intent = Intent(this, MasterMainActivity::class.java)
-        // startActivity(intent)
-        // finish() // Only finish AFTER starting the new activity
+        // Don't finish yet - keep the connection alive
+        // finish() // Uncomment this when you have proper activity management
     }
 
     private fun showPermissionError() {

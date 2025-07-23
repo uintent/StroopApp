@@ -12,6 +12,7 @@ import com.research.projector.utils.StroopGenerator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.research.projector.network.ProjectorNetworkManager
 
 /**
  * ViewModel for StroopDisplayActivity
@@ -219,6 +220,9 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         android.util.Log.d("StroopDisplay", "Setting display content to Stroop stimulus")
         _displayContent.value = DisplayContent.Stroop(timedStimulus.stimulus)
 
+        // SEND NETWORK MESSAGE - STROOP DISPLAYED
+        sendStroopDisplayMessage(timedStimulus.stimulus)
+
         // Schedule stimulus completion
         android.util.Log.d("StroopDisplay", "Scheduling stimulus completion in ${timedStimulus.timing.displayDuration}ms")
         currentJob = viewModelScope.launch {
@@ -231,7 +235,37 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         android.util.Log.d("StroopDisplay", "=== generateAndDisplayNextStimulus completed ===")
     }
-    
+
+    /**
+     * Send Stroop display message over network
+     */
+    private fun sendStroopDisplayMessage(stimulus: StroopStimulus) {
+        try {
+            val hexColor = String.format("#%06X", (0xFFFFFF and stimulus.displayColor))
+            android.util.Log.d("StroopDisplay", "Sending Stroop display message: ${stimulus.colorWord} in $hexColor")
+
+            ProjectorNetworkManager.sendStroopDisplay(
+                word = stimulus.colorWord,
+                displayColor = hexColor,
+                correctAnswer = stimulus.displayColorName
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("StroopDisplay", "Error sending Stroop display message", e)
+        }
+    }
+
+    /**
+     * Send Stroop hidden message over network
+     */
+    private fun sendStroopHiddenMessage() {
+        try {
+            android.util.Log.d("StroopDisplay", "Sending Stroop hidden message")
+            ProjectorNetworkManager.sendStroopHidden()
+        } catch (e: Exception) {
+            android.util.Log.e("StroopDisplay", "Error sending Stroop hidden message", e)
+        }
+    }
+
     /**
      * Handle completion of stimulus display, start interval
      */
@@ -243,7 +277,10 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         val completedStimulus = timedStimulus.complete(System.currentTimeMillis())
         val updatedExecution = taskExecution.updateCurrentStimulus(completedStimulus)
         _taskExecutionState.value = updatedExecution
-        
+
+        // SEND NETWORK MESSAGE - STROOP HIDDEN
+        sendStroopHiddenMessage()
+
         // Start interval period
         startInterval(updatedExecution, completedStimulus.timing.intervalDuration)
     }

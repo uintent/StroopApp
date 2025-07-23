@@ -17,6 +17,12 @@ import com.google.android.material.snackbar.Snackbar
 import com.research.projector.databinding.ActivityTaskSelectionBinding
 import com.research.projector.viewmodels.*
 import com.research.projector.models.*
+import com.research.projector.network.ProjectorNetworkManager
+import android.util.Log
+import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Activity for selecting task sequences and accessing settings.
@@ -54,6 +60,78 @@ class TaskSelectionActivity : AppCompatActivity() {
 
         // Set up click listeners
         setupClickListeners()
+
+        // Add test button for network testing (temporary)
+        addTestStroopButton()
+    }
+
+    /**
+     * Add a test button for sending Stroop messages (for development/testing)
+     */
+    private fun addTestStroopButton() {
+        // Create a test button
+        val testButton = MaterialButton(this).apply {
+            text = "Test Network Stroop"
+            setBackgroundColor(getColor(R.color.primary))
+            setTextColor(getColor(android.R.color.white))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(16, 16, 16, 16)
+            }
+
+            setOnClickListener {
+                sendTestStroopMessage()
+            }
+        }
+
+        // Add it to the top of the task list layout
+        binding.layoutTaskList.addView(testButton, 0)
+    }
+
+    /**
+     * Test method to send a sample Stroop display message
+     */
+    private fun sendTestStroopMessage() {
+        lifecycleScope.launch {
+            try {
+                // Check if connected
+                if (!ProjectorNetworkManager.isConnected()) {
+                    showErrorSnackbar("Not connected to Master app")
+                    return@launch
+                }
+
+                // Send a test Stroop display message
+                Log.d("TaskSelection", "Sending test Stroop message")
+                ProjectorNetworkManager.sendStroopDisplay(
+                    word = "BLAU",
+                    displayColor = "#FF0000", // Red color
+                    correctAnswer = "rot" // Correct answer is "red" in German
+                )
+
+                Toast.makeText(
+                    this@TaskSelectionActivity,
+                    "Test Stroop message sent!",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                // Send hidden message after 2 seconds
+                delay(2000)
+                Log.d("TaskSelection", "Sending Stroop hidden message")
+                ProjectorNetworkManager.sendStroopHidden()
+
+                Toast.makeText(
+                    this@TaskSelectionActivity,
+                    "Stroop hidden message sent!",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+            } catch (e: Exception) {
+                Log.e("TaskSelection", "Error sending test message", e)
+                showErrorSnackbar("Error: ${e.message}")
+            }
+        }
     }
 
     /**
@@ -353,8 +431,10 @@ class TaskSelectionActivity : AppCompatActivity() {
         // Show task list
         binding.layoutTaskList.isVisible = true
 
-        // Clear existing buttons
-        binding.layoutTaskList.removeAllViews()
+        // Clear existing buttons (except the test button at position 0)
+        while (binding.layoutTaskList.childCount > 1) {
+            binding.layoutTaskList.removeViewAt(1)
+        }
 
         // Create button for each task sequence
         sequences.forEach { sequence ->

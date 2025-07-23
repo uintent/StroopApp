@@ -6,23 +6,80 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Location permissions (required for NSD on Android 12+) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- File access permissions (for data export) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="StroopApp Master"
-        android:theme="@style/Theme.StroopApp.NoActionBar">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.StroopApp">
 
+        <!-- Device Discovery Activity (Launcher) -->
         <activity
             android:name=".DeviceDiscoveryActivity"
+            android:label="Connect to Projector"
+            android:theme="@style/Theme.StroopApp"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Color Display Activity (Test Activity) -->
+        <activity
+            android:name=".ColorDisplayActivity"
+            android:label="Color Display"
+            android:parentActivityName=".DeviceDiscoveryActivity"
+            android:theme="@style/Theme.StroopApp">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".DeviceDiscoveryActivity" />
+        </activity>
+
+        <!-- Future activities to be added:
+
+        <activity
+            android:name=".SessionSetupActivity"
+            android:label="Session Setup"
+            android:parentActivityName=".DeviceDiscoveryActivity" />
+
+        <activity
+            android:name=".TaskSelectionActivity"
+            android:label="Task Selection"
+            android:parentActivityName=".SessionSetupActivity" />
+
+        <activity
+            android:name=".TaskExecutionActivity"
+            android:label="Task Execution"
+            android:parentActivityName=".TaskSelectionActivity" />
+
+        <activity
+            android:name=".ResultsActivity"
+            android:label="Results"
+            android:parentActivityName=".TaskExecutionActivity" />
+
+        -->
+
+        <!-- Network Service (if you implement it as a service later) -->
+        <!--
+        <service
+            android:name=".services.MasterNetworkService"
+            android:exported="false" />
+        -->
 
     </application>
 
