@@ -38,6 +38,9 @@ class MainActivity : AppCompatActivity() {
 
         android.util.Log.d("StroopApp", "ViewBinding set up, setting up observers")
 
+        // Show initial network info
+        showInitialNetworkInfo()
+
         // Initialize and start network service
         initializeNetworkService()
 
@@ -48,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         setupClickListeners()
 
         android.util.Log.d("StroopApp", "MainActivity onCreate completed")
+
         // TEMPORARY TEST - Force success state after a delay
         binding.root.postDelayed({
             android.util.Log.d("StroopApp", "FORCING success state for test")
@@ -56,6 +60,15 @@ class MainActivity : AppCompatActivity() {
             binding.layoutError.isVisible = false
             android.util.Log.d("StroopApp", "Forced - layout_ready visibility: ${binding.layoutReady.isVisible}")
         }, 2000) // Wait 2 seconds then force it
+    }
+
+    /**
+     * Show initial network info before service starts
+     */
+    private fun showInitialNetworkInfo() {
+        val ipAddress = getDeviceIpAddress()
+        binding.tvConnectionInfo.text = "Device IP: $ipAddress\nStarting network service..."
+        binding.cardConnectionInfo.visibility = View.VISIBLE
     }
 
     /**
@@ -101,28 +114,33 @@ class MainActivity : AppCompatActivity() {
 
                 // Update UI on main thread
                 runOnUiThread {
+                    // Always keep the connection info visible
+                    binding.cardConnectionInfo.visibility = View.VISIBLE
+
                     when (state) {
                         ProjectorNetworkService.ConnectionState.DISCONNECTED -> {
-                            binding.cardConnectionInfo.visibility = View.GONE
-                            // Don't show toast for initial disconnected state
+                            val ipAddress = getDeviceIpAddress()
+                            binding.tvConnectionInfo.text = "Device IP: $ipAddress\nNetwork: Initializing..."
                         }
                         ProjectorNetworkService.ConnectionState.ADVERTISING -> {
                             // Get the port from the service
                             val port = networkService.getServerPort()
                             val ipAddress = getDeviceIpAddress()
 
-                            binding.tvConnectionInfo.text = "Connect to:\nIP: $ipAddress\nPort: $port"
-                            binding.cardConnectionInfo.visibility = View.VISIBLE
+                            binding.tvConnectionInfo.text = "Ready for connection:\nIP: $ipAddress\nPort: $port"
 
                             Log.d("ProjectorApp", "Showing connection info - IP: $ipAddress, Port: $port")
-                            Toast.makeText(this@MainActivity, "Network: Ready for connections", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@MainActivity, "Network: Ready on port $port", Toast.LENGTH_SHORT).show()
                         }
                         ProjectorNetworkService.ConnectionState.CONNECTED -> {
-                            binding.tvConnectionInfo.text = "Connected to Master!"
+                            val port = networkService.getServerPort()
+                            val ipAddress = getDeviceIpAddress()
+                            binding.tvConnectionInfo.text = "Connected to Master!\nIP: $ipAddress\nPort: $port"
                             Toast.makeText(this@MainActivity, "Connected to Master!", Toast.LENGTH_SHORT).show()
                         }
                         ProjectorNetworkService.ConnectionState.ERROR -> {
-                            binding.cardConnectionInfo.visibility = View.GONE
+                            val ipAddress = getDeviceIpAddress()
+                            binding.tvConnectionInfo.text = "Device IP: $ipAddress\nNetwork: Error"
                             Toast.makeText(this@MainActivity, "Network Error", Toast.LENGTH_SHORT).show()
                         }
                     }

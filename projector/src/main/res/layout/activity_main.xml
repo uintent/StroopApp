@@ -281,7 +281,7 @@
             android:textSize="14sp"
             android:fontFamily="monospace"
             android:text="Waiting for network..."
-            android:visibility="gone" />
+            android:visibility="visible" />  <!-- Changed from "gone" to "visible" -->
 
     </androidx.cardview.widget.CardView>
 

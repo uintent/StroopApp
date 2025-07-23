@@ -159,6 +159,8 @@ class MasterNetworkClient(
     /**
      * Connect to a discovered device
      */
+    // In MasterNetworkClient.kt, update the connectToDevice function:
+
     suspend fun connectToDevice(device: DiscoveredDevice): Boolean = withContext(Dispatchers.IO) {
         if (!device.isResolved) {
             Log.e(TAG, "Device not resolved: ${device.serviceName}")
@@ -172,11 +174,12 @@ class MasterNetworkClient(
             socket = Socket().apply {
                 tcpNoDelay = true
                 keepAlive = true
-                soTimeout = NetworkConstants.SOCKET_TIMEOUT_MS
+                // Don't set soTimeout here - it causes read timeouts!
+                soTimeout = NetworkConstants.SOCKET_TIMEOUT_MS  // REMOVE THIS LINE
             }
 
             val address = InetSocketAddress(device.host, device.port)
-            socket?.connect(address, NetworkConstants.SOCKET_TIMEOUT_MS)
+            socket?.connect(address, NetworkConstants.SOCKET_CONNECTION_TIMEOUT_MS)
 
             Log.d(TAG, "Connected to ${device.host}:${device.port}")
 

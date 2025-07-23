@@ -17,9 +17,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.snackbar.Snackbar
 import com.research.master.databinding.ActivityDeviceDiscoveryBinding
 import com.research.master.network.MasterNetworkClient
+import com.research.master.network.NetworkManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
+import android.view.inputmethod.EditorInfo
 
 /**
  * Activity for discovering and connecting to Projector devices
@@ -51,8 +53,8 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.title = "Connect to Projector"
 
-        // Initialize network client
-        networkClient = MasterNetworkClient(this)
+        // Initialize network client using singleton
+        networkClient = NetworkManager.getNetworkClient(this)
 
         // Set up RecyclerView
         devicesAdapter = DevicesAdapter { device ->
@@ -68,14 +70,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         setupObservers()
 
         // Set up click listeners
-        // Set up click listeners
-        binding.btnRefresh.setOnClickListener {
-            refreshDiscovery()
-        }
-
-        binding.btnTestDirect.setOnClickListener {
-            testDirectConnection()
-        }
+        setupClickListeners()
 
         // Check permissions and start discovery
         binding.root.postDelayed({
@@ -136,12 +131,135 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
     }
 
     private fun setupClickListeners() {
+        // Refresh button
         binding.btnRefresh.setOnClickListener {
             refreshDiscovery()
         }
 
-        binding.btnTestDirect.setOnClickListener {
-            testDirectConnection()
+        // Manual connect button
+        binding.btnManualConnect.setOnClickListener {
+            attemptManualConnection()
+        }
+
+        // Enter key on port field
+        binding.etPort.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                attemptManualConnection()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    private fun attemptManualConnection() {
+        val ipAddress = binding.etIpAddress.text?.toString()?.trim()
+        val portText = binding.etPort.text?.toString()?.trim()
+
+        // Validate input
+        if (ipAddress.isNullOrEmpty()) {
+            binding.layoutIpAddress.error = "Please enter an IP address"
+            return
+        }
+
+        if (portText.isNullOrEmpty()) {
+            binding.layoutPort.error = "Please enter a port number"
+            return
+        }
+
+        // Clear any previous errors
+        binding.layoutIpAddress.error = null
+        binding.layoutPort.error = null
+
+        // Validate IP address format
+        if (!isValidIpAddress(ipAddress)) {
+            binding.layoutIpAddress.error = "Invalid IP address format"
+            return
+        }
+
+        // Parse port
+        val port = try {
+            portText.toInt()
+        } catch (e: NumberFormatException) {
+            binding.layoutPort.error = "Invalid port number"
+            return
+        }
+
+        // Validate port range
+        if (port !in 1..65535) {
+            binding.layoutPort.error = "Port must be between 1 and 65535"
+            return
+        }
+
+        // Hide keyboard
+        currentFocus?.let { view ->
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(view.windowToken, 0)
+        }
+
+        // Create manual device entry
+        val manualDevice = MasterNetworkClient.DiscoveredDevice(
+            serviceName = "Manual_${ipAddress}_$port",
+            teamId = "Manual",
+            deviceId = "Direct",
+            host = ipAddress,
+            port = port,
+            isResolved = true
+        )
+
+        Log.d("MasterNetwork", "Attempting manual connection to $ipAddress:$port")
+
+        // Attempt connection
+        lifecycleScope.launch {
+            val success = networkClient.connectToDevice(manualDevice)
+            if (success) {
+                Log.d("MasterNetwork", "Manual connection successful!")
+                // Save last successful connection
+                saveLastConnection(ipAddress, port)
+                // Start session
+                val sessionId = networkClient.startSession()
+                Log.d("MasterNetwork", "Session started with ID: $sessionId")
+            } else {
+                Log.e("MasterNetwork", "Manual connection failed")
+                Snackbar.make(
+                    binding.root,
+                    "Failed to connect to $ipAddress:$port",
+                    Snackbar.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun isValidIpAddress(ip: String): Boolean {
+        return try {
+            val parts = ip.split(".")
+            if (parts.size != 4) return false
+
+            parts.all { part ->
+                val num = part.toIntOrNull() ?: return false
+                num in 0..255
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun saveLastConnection(ip: String, port: Int) {
+        getSharedPreferences("connection_prefs", MODE_PRIVATE).edit().apply {
+            putString("last_ip", ip)
+            putInt("last_port", port)
+            apply()
+        }
+    }
+
+    private fun loadLastConnection() {
+        val prefs = getSharedPreferences("connection_prefs", MODE_PRIVATE)
+        val lastIp = prefs.getString("last_ip", "")
+        val lastPort = prefs.getInt("last_port", 0)
+
+        if (!lastIp.isNullOrEmpty() && lastPort > 0) {
+            binding.etIpAddress.setText(lastIp)
+            binding.etPort.setText(lastPort.toString())
         }
     }
 
@@ -150,30 +268,38 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             MasterNetworkClient.ConnectionState.DISCONNECTED -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Not connected"
+                binding.btnManualConnect.isEnabled = true
             }
             MasterNetworkClient.ConnectionState.DISCOVERING -> {
                 binding.progressBar.visibility = View.VISIBLE
                 binding.textStatus.text = "Searching for devices..."
+                binding.btnManualConnect.isEnabled = true
             }
             MasterNetworkClient.ConnectionState.CONNECTING -> {
                 binding.progressBar.visibility = View.VISIBLE
                 binding.textStatus.text = "Connecting..."
+                binding.btnManualConnect.isEnabled = false
             }
             MasterNetworkClient.ConnectionState.CONNECTED -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Connected"
+                binding.btnManualConnect.isEnabled = true
                 // Navigate to main activity
                 navigateToMain()
             }
             MasterNetworkClient.ConnectionState.ERROR -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Connection error"
+                binding.btnManualConnect.isEnabled = true
                 Snackbar.make(binding.root, "Connection failed", Snackbar.LENGTH_LONG).show()
             }
         }
     }
 
     private fun checkPermissionsAndStartDiscovery() {
+        // Load last successful connection
+        loadLastConnection()
+
         // On Android 12+ we need location permission for NSD
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             when {
@@ -208,14 +334,25 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             if (success) {
                 // Start session
                 val sessionId = networkClient.startSession()
-                // Session ID will be used for all subsequent communication
+                Log.d("MasterNetwork", "Session started with ID: $sessionId")
             }
         }
     }
 
     private fun navigateToMain() {
-        // TODO: Navigate to main Master app activity
-        finish()
+        // Navigate to main activity without destroying the connection
+        // TODO: Create and navigate to your main activity
+        // For now, just show a success message
+        Snackbar.make(
+            binding.root,
+            "Connected successfully! Ready to start tasks.",
+            Snackbar.LENGTH_LONG
+        ).show()
+
+        // Uncomment and modify when you have your main activity:
+        // val intent = Intent(this, MasterMainActivity::class.java)
+        // startActivity(intent)
+        // finish() // Only finish AFTER starting the new activity
     }
 
     private fun showPermissionError() {
@@ -228,8 +365,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Don't disconnect here - let the next activity handle it
+        // Only stop discovery
         networkClient.stopDiscovery()
-        networkClient.disconnect()
     }
 
     /**
@@ -282,31 +420,6 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
                 itemView.isEnabled = device.isResolved
                 itemView.alpha = if (device.isResolved) 1.0f else 0.5f
-            }
-        }
-    }
-
-    private fun testDirectConnection() {
-        lifecycleScope.launch {
-            // First, find the port from Projector logs
-            // Look for "Server started on port XXXXX" in Projector logs
-
-            val testDevice = MasterNetworkClient.DiscoveredDevice(
-                serviceName = "Direct_Test",
-                teamId = "Team1",
-                deviceId = "ProjectorA",
-                host = "10.0.2.2", // emulator host
-                port = 33995, // Replace with actual port from logs
-                isResolved = true
-            )
-
-            Log.d("MasterNetwork", "Attempting direct connection to ${testDevice.host}:${testDevice.port}")
-
-            val success = networkClient.connectToDevice(testDevice)
-            if (success) {
-                Log.d("MasterNetwork", "Direct connection successful!")
-            } else {
-                Log.e("MasterNetwork", "Direct connection failed")
             }
         }
     }
