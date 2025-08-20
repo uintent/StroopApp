@@ -18,14 +18,17 @@ import com.google.android.material.snackbar.Snackbar
 import com.research.master.databinding.ActivityDeviceDiscoveryBinding
 import com.research.master.network.MasterNetworkClient
 import com.research.master.network.NetworkManager
+import com.research.master.utils.MasterConfigManager
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
 import android.view.inputmethod.EditorInfo
 import android.content.Intent
+import androidx.appcompat.app.AlertDialog
 
 /**
  * Activity for discovering and connecting to Projector devices
+ * Loads configuration on startup and manages device connections
  */
 class DeviceDiscoveryActivity : AppCompatActivity() {
 
@@ -38,8 +41,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            // Don't auto-start discovery anymore
-            // startDiscovery()
+            Log.d("MasterNetwork", "Location permission granted")
         } else {
             showPermissionError()
         }
@@ -52,9 +54,13 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Set up toolbar
-        //setSupportActionBar(binding.toolbar)
-        //supportActionBar?.title = "Connect to Projector"
         binding.toolbar.title = "Connect to Projector"
+
+        // Initialize configuration manager
+        MasterConfigManager.initialize(this)
+
+        // Load configuration on startup
+        loadConfiguration()
 
         // Initialize network client using singleton
         networkClient = NetworkManager.getNetworkClient(this)
@@ -78,15 +84,12 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         // Load last connection immediately
         loadLastConnection()
 
-        // Don't auto-start discovery - just check permissions
+        // Check permissions but don't auto-start discovery
         checkPermissions()
     }
 
     override fun onResume() {
         super.onResume()
-
-        // Don't auto-start discovery
-        // networkClient.startDiscovery()
 
         // Update connection state UI
         lifecycleScope.launch {
@@ -111,13 +114,30 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         if (requestCode == 1) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d("MasterNetwork", "Location permission granted")
-                // Don't auto-start discovery
             } else {
                 Log.e("MasterNetwork", "Location permission denied")
             }
         }
     }
 
+    /**
+     * Load configuration on startup
+     */
+    private fun loadConfiguration() {
+        lifecycleScope.launch {
+            val configLoaded = MasterConfigManager.loadConfiguration()
+            if (!configLoaded) {
+                showConfigurationError()
+            } else {
+                Log.d("MasterConfig", "Configuration loaded successfully")
+                updateConfigStatus("Configuration loaded")
+            }
+        }
+    }
+
+    /**
+     * Set up observers for network state and configuration
+     */
     private fun setupObservers() {
         // Observe discovered devices
         lifecycleScope.launch {
@@ -141,8 +161,31 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 updateConnectionState(state)
             }
         }
+
+        // Observe configuration state
+        lifecycleScope.launch {
+            MasterConfigManager.configState.collectLatest { configState ->
+                when (configState) {
+                    is MasterConfigManager.ConfigState.NotLoaded -> {
+                        updateConfigStatus("Configuration not loaded")
+                    }
+                    is MasterConfigManager.ConfigState.Loading -> {
+                        updateConfigStatus("Loading configuration...")
+                    }
+                    is MasterConfigManager.ConfigState.Loaded -> {
+                        updateConfigStatus("Configuration ready")
+                    }
+                    is MasterConfigManager.ConfigState.Error -> {
+                        updateConfigStatus("Config error: ${configState.message}")
+                    }
+                }
+            }
+        }
     }
 
+    /**
+     * Set up click listeners for UI elements
+     */
     private fun setupClickListeners() {
         // Refresh button
         binding.btnRefresh.setOnClickListener {
@@ -165,7 +208,16 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Attempt manual connection
+     */
     private fun attemptManualConnection() {
+        // First check if configuration is ready
+        if (!MasterConfigManager.isConfigurationReady()) {
+            showConfigurationNotReadyDialog()
+            return
+        }
+
         val ipAddress = binding.etIpAddress.text?.toString()?.trim()
         val portText = binding.etPort.text?.toString()?.trim()
 
@@ -227,28 +279,57 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
         // Attempt connection
         lifecycleScope.launch {
-            val success = networkClient.connectToDevice(manualDevice)
-            if (success) {
-                Log.d("MasterNetwork", "Manual connection successful!")
-                // Save last successful connection
-                saveLastConnection(ipAddress, port)
-                // Start session
-                val sessionId = networkClient.startSession()
-                Log.d("MasterNetwork", "Session started with ID: $sessionId")
+            try {
+                val success = networkClient.connectToDevice(manualDevice)
+                if (success) {
+                    Log.d("MasterNetwork", "Manual connection successful!")
 
-                // Navigate to ColorDisplayActivity
-                startActivity(Intent(this@DeviceDiscoveryActivity, ColorDisplayActivity::class.java))
-            } else {
-                Log.e("MasterNetwork", "Manual connection failed")
+                    // Save last successful connection
+                    saveLastConnection(ipAddress, port)
+
+                    // Start session
+                    val sessionId = networkClient.startSession()
+                    Log.d("MasterNetwork", "Session started with ID: $sessionId")
+
+                    // Store session ID in NetworkManager
+                    NetworkManager.setCurrentSessionId(sessionId)
+
+                    // Wait a moment for connection to stabilize
+                    kotlinx.coroutines.delay(500)
+
+                    // Show success message
+                    Snackbar.make(
+                        binding.root,
+                        "Connected successfully!",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
+
+                    // Navigate to Task Selection after a brief delay
+                    kotlinx.coroutines.delay(1000)
+                    startActivity(Intent(this@DeviceDiscoveryActivity, TaskSelectionActivity::class.java))
+
+                } else {
+                    Log.e("MasterNetwork", "Manual connection failed")
+                    Snackbar.make(
+                        binding.root,
+                        "Failed to connect to $ipAddress:$port",
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e("MasterNetwork", "Connection attempt failed", e)
                 Snackbar.make(
                     binding.root,
-                    "Failed to connect to $ipAddress:$port",
+                    "Connection error: ${e.message}",
                     Snackbar.LENGTH_LONG
                 ).show()
             }
         }
     }
 
+    /**
+     * Validate IP address format
+     */
     private fun isValidIpAddress(ip: String): Boolean {
         return try {
             val parts = ip.split(".")
@@ -263,6 +344,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Save last successful connection
+     */
     private fun saveLastConnection(ip: String, port: Int) {
         getSharedPreferences("connection_prefs", MODE_PRIVATE).edit().apply {
             putString("last_ip", ip)
@@ -271,6 +355,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Load last connection from preferences
+     */
     private fun loadLastConnection() {
         val prefs = getSharedPreferences("connection_prefs", MODE_PRIVATE)
         val lastIp = prefs.getString("last_ip", "")
@@ -282,17 +369,20 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Update connection state UI
+     */
     private fun updateConnectionState(state: MasterNetworkClient.ConnectionState) {
         when (state) {
             MasterNetworkClient.ConnectionState.DISCONNECTED -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Not connected"
-                binding.btnManualConnect.isEnabled = true
+                binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
             }
             MasterNetworkClient.ConnectionState.DISCOVERING -> {
                 binding.progressBar.visibility = View.VISIBLE
                 binding.textStatus.text = "Searching for devices..."
-                binding.btnManualConnect.isEnabled = true
+                binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
             }
             MasterNetworkClient.ConnectionState.CONNECTING -> {
                 binding.progressBar.visibility = View.VISIBLE
@@ -302,19 +392,27 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             MasterNetworkClient.ConnectionState.CONNECTED -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Connected"
-                binding.btnManualConnect.isEnabled = true
-                // Navigate to main activity
-                navigateToMain()
+                binding.btnManualConnect.isEnabled = false
             }
             MasterNetworkClient.ConnectionState.ERROR -> {
                 binding.progressBar.visibility = View.GONE
                 binding.textStatus.text = "Connection error"
-                binding.btnManualConnect.isEnabled = true
+                binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
                 Snackbar.make(binding.root, "Connection failed", Snackbar.LENGTH_LONG).show()
             }
         }
     }
 
+    /**
+     * Update configuration status in UI
+     */
+    private fun updateConfigStatus(status: String) {
+        Log.d("MasterConfig", "Config status: $status")
+    }
+
+    /**
+     * Check permissions
+     */
     private fun checkPermissions() {
         // On Android 12+ we need location permission for NSD
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -323,47 +421,126 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     this,
                     Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Permission granted, but don't auto-start discovery
                     Log.d("MasterNetwork", "Location permission already granted")
                 }
                 else -> {
-                    // Request permission
                     locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
             }
         }
     }
 
+    /**
+     * Start device discovery
+     */
     private fun startDiscovery() {
         networkClient.startDiscovery()
     }
 
+    /**
+     * Refresh discovery
+     */
     private fun refreshDiscovery() {
         networkClient.stopDiscovery()
         devicesAdapter.updateDevices(emptyList())
         startDiscovery()
     }
 
+    /**
+     * Connect to discovered device
+     */
     private fun connectToDevice(device: MasterNetworkClient.DiscoveredDevice) {
+        if (!MasterConfigManager.isConfigurationReady()) {
+            showConfigurationNotReadyDialog()
+            return
+        }
+
         lifecycleScope.launch {
-            val success = networkClient.connectToDevice(device)
-            if (success) {
-                // Start session
-                val sessionId = networkClient.startSession()
-                Log.d("MasterNetwork", "Session started with ID: $sessionId")
+            try {
+                val success = networkClient.connectToDevice(device)
+                if (success) {
+                    // Start session
+                    val sessionId = networkClient.startSession()
+                    Log.d("MasterNetwork", "Session started with ID: $sessionId")
+
+                    // Store session ID in NetworkManager
+                    NetworkManager.setCurrentSessionId(sessionId)
+
+                    // Wait a moment for connection to stabilize
+                    kotlinx.coroutines.delay(500)
+
+                    navigateToMain()
+                }
+            } catch (e: Exception) {
+                Log.e("MasterNetwork", "Connection failed", e)
+                Snackbar.make(
+                    binding.root,
+                    "Connection failed: ${e.message}",
+                    Snackbar.LENGTH_LONG
+                ).show()
             }
         }
     }
 
+    /**
+     * Navigate to main activity after successful connection
+     */
     private fun navigateToMain() {
-        // Navigate to color display activity for testing
-        val intent = Intent(this, ColorDisplayActivity::class.java)
+        val intent = Intent(this, TaskSelectionActivity::class.java)
         startActivity(intent)
-
-        // Don't finish yet - keep the connection alive
-        // finish() // Uncomment this when you have proper activity management
     }
 
+    /**
+     * Show configuration error dialog
+     */
+    private fun showConfigurationError() {
+        AlertDialog.Builder(this)
+            .setTitle("Configuration Error")
+            .setMessage("Failed to load application configuration. Please check that research_config.json is properly formatted.")
+            .setPositiveButton("Retry") { _, _ ->
+                reloadConfiguration()
+            }
+            .setNegativeButton("Exit") { _, _ ->
+                finish()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Show configuration not ready dialog
+     */
+    private fun showConfigurationNotReadyDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Configuration Not Ready")
+            .setMessage("Configuration is still loading or failed to load. Please wait or retry configuration loading.")
+            .setPositiveButton("Retry Config") { _, _ ->
+                reloadConfiguration()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /**
+     * Reload configuration
+     */
+    private fun reloadConfiguration() {
+        lifecycleScope.launch {
+            updateConfigStatus("Reloading configuration...")
+            val success = MasterConfigManager.reloadConfiguration()
+            if (success) {
+                updateConfigStatus("Configuration reloaded successfully")
+            } else {
+                showConfigurationError()
+            }
+        }
+    }
+
+    /**
+     * Show permission error
+     */
     private fun showPermissionError() {
         Snackbar.make(
             binding.root,

@@ -17,6 +17,8 @@ import android.util.Log
 /**
  * Activity that displays the current Stroop color being shown on the Projector
  * This is a test activity to verify data transfer between apps
+ *
+ * Note: This will be replaced with proper task selection and management UI
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
@@ -30,7 +32,6 @@ class ColorDisplayActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Remove toolbar setup - use default action bar instead
-        // setSupportActionBar(binding.toolbar)
         supportActionBar?.title = "Stroop Color Monitor"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -47,8 +48,9 @@ class ColorDisplayActivity : AppCompatActivity() {
         showWaitingForStroop()
 
         // Test button to trigger Stroop on Projector
+        // TODO: Replace this with proper task selection UI
         binding.btnTriggerStroop.setOnClickListener {
-            triggerStroopTest()
+            triggerTestStroop()
         }
     }
 
@@ -86,7 +88,6 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
         Log.d("ColorDisplay", "Stroop displayed: word=${message.word}, color=${message.displayColor}")
 
-        // Already on UI thread from lifecycleScope.launch, no need for runOnUiThread
         try {
             val color = Color.parseColor(message.displayColor)
             Log.d("ColorDisplay", "Parsed color: $color")
@@ -123,16 +124,29 @@ class ColorDisplayActivity : AppCompatActivity() {
         binding.btnTriggerStroop.isEnabled = false
     }
 
-    private fun triggerStroopTest() {
+    /**
+     * Temporary test function to trigger Stroop display
+     * TODO: Replace with proper task-based commands
+     */
+    private fun triggerTestStroop() {
         lifecycleScope.launch {
             try {
-                // Send a test command to start Stroop display
-                // This will be implemented based on your command structure
-                Log.d("ColorDisplay", "Triggering Stroop test...")
+                Log.d("ColorDisplay", "Triggering test Stroop...")
                 binding.tvStatus.text = "Triggering Stroop..."
 
-                // TODO: Send actual command to Projector
-                // networkClient.sendMessage(StartStroopCommand(...))
+                // Get current session ID from NetworkManager
+                val sessionId = NetworkManager.getCurrentSessionId()
+                if (sessionId == null) {
+                    binding.tvStatus.text = "Error: No active session"
+                    Log.e("ColorDisplay", "No session ID available")
+                    return@launch
+                }
+
+                // TODO: Replace this with new task command system
+                // For now, this is just a placeholder that will be removed
+
+                binding.tvStatus.text = "TODO: Replace with task commands"
+                Log.d("ColorDisplay", "TODO: Implement new task-based command system")
 
             } catch (e: Exception) {
                 Log.e("ColorDisplay", "Error triggering Stroop", e)

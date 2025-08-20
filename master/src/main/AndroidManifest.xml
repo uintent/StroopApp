@@ -39,15 +39,30 @@
             </intent-filter>
         </activity>
 
-        <!-- Color Display Activity (Test Activity) -->
+        <!-- Task Selection Activity -->
         <activity
-            android:name=".ColorDisplayActivity"
-            android:label="Color Display"
+            android:name=".TaskSelectionActivity"
+            android:label="Task Selection"
             android:parentActivityName=".DeviceDiscoveryActivity"
-            android:theme="@style/Theme.StroopApp">
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StroopApp"
+            android:exported="false">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".DeviceDiscoveryActivity" />
+        </activity>
+
+        <!-- Color Display Activity (Test Activity / Task Control Screen) -->
+        <activity
+            android:name=".ColorDisplayActivity"
+            android:label="Task Control"
+            android:parentActivityName=".TaskSelectionActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StroopApp"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".TaskSelectionActivity" />
         </activity>
 
         <!-- Future activities to be added:
@@ -58,9 +73,9 @@
             android:parentActivityName=".DeviceDiscoveryActivity" />
 
         <activity
-            android:name=".TaskSelectionActivity"
-            android:label="Task Selection"
-            android:parentActivityName=".SessionSetupActivity" />
+            android:name=".TaskListManagementActivity"
+            android:label="Task List Management"
+            android:parentActivityName=".TaskSelectionActivity" />
 
         <activity
             android:name=".TaskExecutionActivity"
