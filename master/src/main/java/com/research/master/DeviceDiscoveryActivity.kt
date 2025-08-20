@@ -287,13 +287,6 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     // Save last successful connection
                     saveLastConnection(ipAddress, port)
 
-                    // Start session
-                    val sessionId = networkClient.startSession()
-                    Log.d("MasterNetwork", "Session started with ID: $sessionId")
-
-                    // Store session ID in NetworkManager
-                    NetworkManager.setCurrentSessionId(sessionId)
-
                     // Wait a moment for connection to stabilize
                     kotlinx.coroutines.delay(500)
 
@@ -304,9 +297,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                         Snackbar.LENGTH_SHORT
                     ).show()
 
-                    // Navigate to Task Selection after a brief delay
+                    // Navigate to Participant Info after a brief delay
                     kotlinx.coroutines.delay(1000)
-                    startActivity(Intent(this@DeviceDiscoveryActivity, TaskSelectionActivity::class.java))
+                    startActivity(Intent(this@DeviceDiscoveryActivity, ParticipantInfoActivity::class.java))
 
                 } else {
                     Log.e("MasterNetwork", "Manual connection failed")
@@ -459,17 +452,10 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             try {
                 val success = networkClient.connectToDevice(device)
                 if (success) {
-                    // Start session
-                    val sessionId = networkClient.startSession()
-                    Log.d("MasterNetwork", "Session started with ID: $sessionId")
-
-                    // Store session ID in NetworkManager
-                    NetworkManager.setCurrentSessionId(sessionId)
-
                     // Wait a moment for connection to stabilize
                     kotlinx.coroutines.delay(500)
 
-                    navigateToMain()
+                    navigateToParticipantInfo()
                 }
             } catch (e: Exception) {
                 Log.e("MasterNetwork", "Connection failed", e)
@@ -483,10 +469,19 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
     }
 
     /**
+     * Navigate to participant information after successful connection
+     */
+    private fun navigateToParticipantInfo() {
+        val intent = Intent(this, ParticipantInfoActivity::class.java)
+        startActivity(intent)
+    }
+
+    /**
      * Navigate to main activity after successful connection
+     * @deprecated Use navigateToParticipantInfo() instead
      */
     private fun navigateToMain() {
-        val intent = Intent(this, TaskSelectionActivity::class.java)
+        val intent = Intent(this, ParticipantInfoActivity::class.java)
         startActivity(intent)
     }
 

@@ -39,10 +39,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Task Selection Activity -->
+        <!-- Participant Information Activity -->
         <activity
-            android:name=".TaskSelectionActivity"
-            android:label="Task Selection"
+            android:name=".ParticipantInfoActivity"
+            android:label="Participant Information"
             android:parentActivityName=".DeviceDiscoveryActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.StroopApp"
@@ -50,6 +50,19 @@
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".DeviceDiscoveryActivity" />
+        </activity>
+
+        <!-- Task Selection Activity -->
+        <activity
+            android:name=".TaskSelectionActivity"
+            android:label="Task Selection"
+            android:parentActivityName=".ParticipantInfoActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StroopApp"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".ParticipantInfoActivity" />
         </activity>
 
         <!-- Color Display Activity (Test Activity / Task Control Screen) -->
@@ -66,11 +79,6 @@
         </activity>
 
         <!-- Future activities to be added:
-
-        <activity
-            android:name=".SessionSetupActivity"
-            android:label="Session Setup"
-            android:parentActivityName=".DeviceDiscoveryActivity" />
 
         <activity
             android:name=".TaskListManagementActivity"

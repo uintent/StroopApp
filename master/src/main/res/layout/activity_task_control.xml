@@ -55,7 +55,6 @@
                         android:textColor="?attr/colorPrimary"
                         android:layout_marginBottom="8dp" />
 
-                    <!-- NEW: These IDs match what ColorDisplayActivity expects -->
                     <TextView
                         android:id="@+id/text_task_title"
                         android:layout_width="match_parent"
@@ -86,148 +85,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Current Stroop Display Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="8dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="🎯 Current Stroop Display"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="?attr/colorPrimary"
-                        android:layout_marginBottom="12dp"
-                        android:gravity="center" />
-
-                    <!-- Task Status -->
-                    <TextView
-                        android:id="@+id/text_stroop_status"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Task ready - Press START to begin"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:gravity="center"
-                        android:layout_marginBottom="16dp"
-                        android:padding="12dp"
-                        android:background="?attr/colorSurface"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <!-- Color Display (Large and Prominent) -->
-                    <View
-                        android:id="@+id/view_current_color"
-                        android:layout_width="match_parent"
-                        android:layout_height="150dp"
-                        android:layout_marginBottom="16dp"
-                        android:background="@android:color/darker_gray"
-                        android:elevation="2dp" />
-
-                    <!-- Color Name (what participant should say) -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="16dp"
-                        android:gravity="center"
-                        android:background="?attr/colorSurface"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Participant should say: "
-                            android:textSize="14sp"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <TextView
-                            android:id="@+id/text_current_color"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Waiting..."
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace"
-                            android:textColor="?attr/colorPrimary" />
-
-                    </LinearLayout>
-
-                    <!-- Correct Answer Guidance (removed as it's now above) -->
-                    <!-- Color name is already shown in the "Participant should say" section -->
-
-                    <!-- Participant Response Recording Section -->
-                    <LinearLayout
-                        android:id="@+id/layout_response_buttons"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:visibility="gone"
-                        android:background="?attr/colorSurface"
-                        android:padding="12dp">
-
-                        <TextView
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="🎤 Participant's Response:"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:gravity="center"
-                            android:layout_marginBottom="12dp"
-                            android:textColor="?attr/colorPrimary" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center">
-
-                            <Button
-                                android:id="@+id/btn_response_correct"
-                                android:layout_width="0dp"
-                                android:layout_height="60dp"
-                                android:layout_weight="1"
-                                android:layout_marginEnd="8dp"
-                                android:text="✓ CORRECT"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:backgroundTint="@android:color/holo_green_dark"
-                                android:textColor="@android:color/white"
-                                style="@style/Widget.MaterialComponents.Button" />
-
-                            <Button
-                                android:id="@+id/btn_response_incorrect"
-                                android:layout_width="0dp"
-                                android:layout_height="60dp"
-                                android:layout_weight="1"
-                                android:layout_marginStart="8dp"
-                                android:text="✗ INCORRECT"
-                                android:textSize="14sp"
-                                android:textStyle="bold"
-                                android:backgroundTint="@android:color/holo_red_dark"
-                                android:textColor="@android:color/white"
-                                style="@style/Widget.MaterialComponents.Button" />
-
-                        </LinearLayout>
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- LEGACY: Keep original IDs for backward compatibility -->
-            <!-- Status Text (original) -->
+            <!-- Original Status Text (kept for compatibility) -->
             <TextView
                 android:id="@+id/tv_status"
                 android:layout_width="match_parent"
@@ -236,19 +94,17 @@
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:gravity="center"
-                android:layout_marginBottom="16dp"
-                android:visibility="gone" />
+                android:layout_marginBottom="16dp" />
 
-            <!-- Color Display View (original) -->
+            <!-- Original Color Display View (kept for compatibility) -->
             <View
                 android:id="@+id/view_color_display"
                 android:layout_width="match_parent"
                 android:layout_height="120dp"
                 android:layout_marginBottom="16dp"
-                android:background="@android:color/darker_gray"
-                android:visibility="gone" />
+                android:background="@android:color/darker_gray" />
 
-            <!-- Color Information (original) -->
+            <!-- Original Color Information (kept for compatibility) -->
             <TextView
                 android:id="@+id/tv_color_info"
                 android:layout_width="match_parent"
@@ -257,10 +113,9 @@
                 android:textSize="16sp"
                 android:gravity="center"
                 android:fontFamily="monospace"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
+                android:layout_marginBottom="8dp" />
 
-            <!-- Correct Answer Display (original) -->
+            <!-- Original Correct Answer Display (enhanced) -->
             <TextView
                 android:id="@+id/tv_correct_answer"
                 android:layout_width="match_parent"
@@ -270,10 +125,46 @@
                 android:textStyle="bold"
                 android:textColor="?attr/colorPrimary"
                 android:gravity="center"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Participant Response Buttons (show when Stroop is active) -->
+            <LinearLayout
+                android:id="@+id/layout_response_buttons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
                 android:layout_marginBottom="16dp"
-                android:visibility="gone" />
+                android:visibility="gone">
 
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Participant's Response:"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:gravity="center_vertical" />
 
+                <Button
+                    android:id="@+id/btn_response_correct"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="CORRECT"
+                    android:textSize="12sp"
+                    android:layout_marginHorizontal="4dp"
+                    android:backgroundTint="@android:color/holo_green_dark"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+
+                <Button
+                    android:id="@+id/btn_response_incorrect"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="INCORRECT"
+                    android:textSize="12sp"
+                    android:backgroundTint="@android:color/holo_red_dark"
+                    style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+
+            </LinearLayout>
 
             <!-- Task Control Buttons -->
             <LinearLayout
@@ -282,7 +173,7 @@
                 android:orientation="horizontal"
                 android:layout_marginBottom="16dp">
 
-                <!-- Start Task Button (using original ID) -->
+                <!-- Original Trigger Button (renamed to START) -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_trigger_stroop"
                     android:layout_width="0dp"
@@ -291,18 +182,6 @@
                     android:layout_marginEnd="4dp"
                     android:text="START TASK"
                     android:textSize="12sp" />
-
-                <!-- NEW: Missing button IDs that ColorDisplayActivity expects -->
-                <Button
-                    android:id="@+id/btn_start_task"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    android:text="START"
-                    android:textSize="12sp"
-                    android:visibility="gone"
-                    style="@style/Widget.MaterialComponents.Button" />
 
                 <Button
                     android:id="@+id/btn_pause_task"

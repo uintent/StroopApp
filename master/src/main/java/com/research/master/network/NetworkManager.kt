@@ -1,6 +1,7 @@
 package com.research.master.network
 
 import android.content.Context
+import android.content.SharedPreferences
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 object NetworkManager {
     private var networkClient: MasterNetworkClient? = null
     private var currentSessionId: String? = null
+    private var preferences: SharedPreferences? = null
 
     /**
      * Initialize or get the network client
@@ -18,6 +20,14 @@ object NetworkManager {
         if (networkClient == null) {
             networkClient = MasterNetworkClient(context.applicationContext)
         }
+
+        // Initialize preferences if not already done
+        if (preferences == null) {
+            preferences = context.applicationContext.getSharedPreferences("network_prefs", Context.MODE_PRIVATE)
+            // Load saved session ID if available
+            currentSessionId = preferences?.getString("current_session_id", null)
+        }
+
         return networkClient!!
     }
 
@@ -35,9 +45,19 @@ object NetworkManager {
 
     /**
      * Set current session ID (called after successful session start)
+     * Now persists across app restarts
      */
     fun setCurrentSessionId(sessionId: String) {
         currentSessionId = sessionId
+        preferences?.edit()?.putString("current_session_id", sessionId)?.apply()
+    }
+
+    /**
+     * Clear current session
+     */
+    fun clearCurrentSession() {
+        currentSessionId = null
+        preferences?.edit()?.remove("current_session_id")?.apply()
     }
 
     /**
@@ -45,7 +65,7 @@ object NetworkManager {
      */
     fun disconnect() {
         networkClient?.disconnect()
-        currentSessionId = null
+        clearCurrentSession()
     }
 
     /**
@@ -53,5 +73,14 @@ object NetworkManager {
      */
     fun stopDiscovery() {
         networkClient?.stopDiscovery()
+    }
+
+    /**
+     * Reset network client (for reconnection scenarios)
+     */
+    fun reset() {
+        networkClient?.disconnect()
+        networkClient = null
+        clearCurrentSession()
     }
 }
