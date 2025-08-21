@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.research.shared.network.StroopStartedMessage
 
 /**
  * Singleton manager for network operations in the Projector app
@@ -182,4 +183,45 @@ object ProjectorNetworkManager {
             }
         }
     }
+
+    /**
+     * Send a Stroop started message with detailed information
+     * NEW: Supports the enhanced StroopStartedMessage format
+     */
+    fun sendStroopStarted(
+        taskId: String,
+        stroopIndex: Int,
+        word: String,
+        displayColor: String,
+        correctAnswer: String
+    ) {
+        Log.d(TAG, "=== sendStroopStarted() called ===")
+        Log.d(TAG, "Service instance: ${networkService?.hashCode()}")
+
+        val sessionId = getCurrentSessionId()
+
+        if (sessionId == null) {
+            Log.e(TAG, "❌ Cannot send StroopStarted - no session ID")
+            return
+        }
+
+        Log.d(TAG, "✅ Sending StroopStarted with session: $sessionId")
+
+        scope.launch {
+            val message = StroopStartedMessage(
+                sessionId = sessionId,
+                taskId = taskId,
+                stroopIndex = stroopIndex,
+                word = word,
+                displayColor = displayColor,
+                correctAnswer = correctAnswer,
+                displayStartTime = System.currentTimeMillis()
+            )
+
+            Log.d(TAG, "Calling networkService.sendMessage() for StroopStarted")
+            networkService?.sendMessage(message)
+            Log.d(TAG, "StroopStarted message sent: $correctAnswer")
+        }
+    }
+
 }

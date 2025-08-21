@@ -685,54 +685,43 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * Send detailed Stroop started message to Master
+     * FIXED: Use ProjectorNetworkManager instead of direct service call
      */
     private fun sendStroopStartedToMaster(timedStimulus: TimedStroopStimulus) {
         Log.d("StroopDisplay", "=== ATTEMPTING TO SEND MESSAGE ===")
         Log.d("StroopDisplay", "Network service available: ${networkService != null}")
-
+        Log.d("StroopDisplay", "Is connected: ${networkService?.isConnected()}")
 
         try {
-            val sessionId = networkService?.getCurrentSessionId() ?: return
+            val sessionId = networkService?.getCurrentSessionId()
             Log.d("StroopDisplay", "Session ID: $sessionId")
-            Log.d("StroopDisplay", "Is connected: ${networkService?.isConnected()}")
 
             if (sessionId == null) {
                 Log.e("StroopDisplay", "❌ No session ID - cannot send message")
                 return
             }
 
-            val taskId = currentTaskId ?: return
+            val taskId = currentTaskId ?: "1" // Use fallback task ID if Master didn't set one
+            if (taskId == null) {
+                Log.e("StroopDisplay", "❌ No task ID - cannot send message")
+                return
+            }
 
             val hexColor = String.format("#%06X", (0xFFFFFF and timedStimulus.stimulus.displayColor))
 
-            val stroopStarted = StroopStartedMessage(
-                sessionId = sessionId,
+            // FIXED: Use ProjectorNetworkManager instead of direct service call
+            ProjectorNetworkManager.sendStroopStarted(
                 taskId = taskId,
                 stroopIndex = stimulusSequenceNumber,
                 word = timedStimulus.stimulus.colorWord,
                 displayColor = hexColor,
-                correctAnswer = timedStimulus.stimulus.displayColorName,
-                displayStartTime = System.currentTimeMillis()
+                correctAnswer = timedStimulus.stimulus.displayColorName
             )
 
-            viewModelScope.launch {
-                networkService?.sendMessage(stroopStarted)
-                android.util.Log.d("StroopDisplay", "Sent StroopStarted to Master: ${timedStimulus.stimulus.colorWord}")
-            }
-
-            Log.d("StroopDisplay", "Message to send: $stroopStarted")
-
-            viewModelScope.launch {
-                try {
-                    networkService?.sendMessage(stroopStarted)
-                    Log.d("StroopDisplay", "✅ Message sent successfully to Master")
-                } catch (e: Exception) {
-                    Log.e("StroopDisplay", "❌ Failed to send message to Master", e)
-                }
-            }
+            Log.d("StroopDisplay", "✅ StroopStarted sent via ProjectorNetworkManager: ${timedStimulus.stimulus.displayColorName}")
 
         } catch (e: Exception) {
-            android.util.Log.e("StroopDisplay", "Error sending Stroop started to Master", e)
+            Log.e("StroopDisplay", "❌ Error sending Stroop started to Master", e)
         }
     }
 

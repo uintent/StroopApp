@@ -16,6 +16,7 @@ import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CompletableDeferred
 
 /**
  * Network client for the Master app that discovers and connects to Projector devices
@@ -156,11 +157,12 @@ class MasterNetworkClient(
         discoveryListener = null
     }
 
+    // Replace the connectToDevice method in MasterNetworkClient.kt
+
     /**
      * Connect to a discovered device
+     * FIXED: Ensure message handling is ready before completing connection
      */
-    // In MasterNetworkClient.kt, update the connectToDevice function:
-
     suspend fun connectToDevice(device: DiscoveredDevice): Boolean = withContext(Dispatchers.IO) {
         if (!device.isResolved) {
             Log.e(TAG, "Device not resolved: ${device.serviceName}")
@@ -174,7 +176,6 @@ class MasterNetworkClient(
             socket = Socket().apply {
                 tcpNoDelay = true
                 keepAlive = true
-                // Remove the soTimeout line as suggested in the comment
             }
 
             val address = InetSocketAddress(device.host, device.port)
@@ -183,15 +184,29 @@ class MasterNetworkClient(
             Log.d(TAG, "Connected to ${device.host}:${device.port}")
 
             connectedDevice = device
-            _connectionState.value = ConnectionState.CONNECTED
 
-            // Start message handling in a new coroutine (don't wait for it)
-            scope.launch {
-                handleConnection()
+            // FIXED: Use a CompletableDeferred to wait for message handling to be ready
+            val messageHandlingReady = CompletableDeferred<Boolean>()
+
+            // Start message handling and wait for it to be ready
+            val connectionJob = scope.launch {
+                handleConnection(messageHandlingReady)
             }
 
-            // Give the connection a moment to stabilize
-            delay(100)
+            // Wait for message handling to be ready or timeout
+            val isReady = withTimeoutOrNull(5000) {
+                messageHandlingReady.await()
+            } ?: false
+
+            if (!isReady) {
+                Log.e(TAG, "Message handling failed to start within timeout")
+                connectionJob.cancel()
+                disconnect()
+                return@withContext false
+            }
+
+            _connectionState.value = ConnectionState.CONNECTED
+            Log.d(TAG, "Connection fully established and ready for messages")
 
             return@withContext true
 
@@ -202,6 +217,49 @@ class MasterNetworkClient(
             return@withContext false
         }
     }
+
+    /**
+     * Handle the socket connection
+     * FIXED: Signal when message handling is ready
+     */
+    private suspend fun handleConnection(readySignal: CompletableDeferred<Boolean>? = null) = withContext(Dispatchers.IO) {
+        val currentSocket = socket ?: return@withContext
+
+        try {
+            val input = BufferedInputStream(currentSocket.getInputStream())
+            val output = BufferedOutputStream(currentSocket.getOutputStream())
+
+            // Launch coroutines for reading and writing
+            val readJob = launch { readMessages(input) }
+            val writeJob = launch { writeMessages(output) }
+            val heartbeatJob = launch { sendHeartbeats() }
+
+            // Give the coroutines a moment to start
+            delay(200)
+
+            // Signal that message handling is ready
+            readySignal?.complete(true)
+            Log.d(TAG, "Message handling coroutines started and ready")
+
+            // Wait for any job to complete
+            select<Unit> {
+                readJob.onJoin { }
+                writeJob.onJoin { }
+            }
+
+            // Cancel other jobs
+            readJob.cancel()
+            writeJob.cancel()
+            heartbeatJob.cancel()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Connection error", e)
+            readySignal?.complete(false)
+        } finally {
+            disconnect()
+        }
+    }
+
 
     /**
      * Disconnect from current device
@@ -224,18 +282,46 @@ class MasterNetworkClient(
     /**
      * Start a new session
      */
+    /**
+     * Start a new session
+     * FIXED: Add retry logic and better error handling
+     */
     suspend fun startSession(): String {
+        if (connectionState.value != ConnectionState.CONNECTED) {
+            throw IllegalStateException("Not connected to any device")
+        }
+
         val sessionId = UUID.randomUUID().toString()
         currentSessionId = sessionId
 
-        // Send handshake
+        // Send handshake with retry logic
         val handshake = HandshakeMessage(
             sessionId = sessionId,
             masterDeviceId = masterDeviceId,
             masterVersion = "1.0.0"
         )
 
-        sendMessage(handshake)
+        var retryCount = 0
+        val maxRetries = 3
+
+        while (retryCount < maxRetries) {
+            try {
+                Log.d(TAG, "Sending handshake (attempt ${retryCount + 1})")
+                sendMessage(handshake)
+                Log.d(TAG, "Handshake sent successfully")
+                break
+            } catch (e: Exception) {
+                retryCount++
+                Log.w(TAG, "Handshake attempt $retryCount failed: ${e.message}")
+
+                if (retryCount >= maxRetries) {
+                    throw e
+                }
+
+                // Wait before retry
+                delay(500)
+            }
+        }
 
         return sessionId
     }
