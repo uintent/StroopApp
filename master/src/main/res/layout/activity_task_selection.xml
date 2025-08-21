@@ -32,58 +32,7 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Individual Tasks Section -->
-            <LinearLayout
-                android:id="@+id/section_tasks"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Individual Tasks"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorPrimary"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Select a single task to run immediately"
-                    android:textSize="14sp"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:layout_marginBottom="16dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recycler_tasks"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    tools:listitem="@layout/item_task_card" />
-
-                <TextView
-                    android:id="@+id/text_no_tasks"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="No individual tasks available"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textStyle="italic"
-                    android:padding="16dp"
-                    android:gravity="center"
-                    android:visibility="gone" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginVertical="24dp"
-                android:background="?android:attr/listDivider" />
-
-            <!-- Task Lists Section -->
+            <!-- Task Lists Section (MOVED TO TOP) -->
             <LinearLayout
                 android:id="@+id/section_task_lists"
                 android:layout_width="match_parent"
@@ -119,6 +68,57 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="No task lists available"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textStyle="italic"
+                    android:padding="16dp"
+                    android:gravity="center"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="24dp"
+                android:background="?android:attr/listDivider" />
+
+            <!-- Individual Tasks Section (MOVED TO BOTTOM) -->
+            <LinearLayout
+                android:id="@+id/section_tasks"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Individual Tasks"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorPrimary"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Select a single task to run immediately"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="16dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_tasks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    tools:listitem="@layout/item_task_card" />
+
+                <TextView
+                    android:id="@+id/text_no_tasks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="No individual tasks available"
                     android:textColor="?android:attr/textColorSecondary"
                     android:textStyle="italic"
                     android:padding="16dp"

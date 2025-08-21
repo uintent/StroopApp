@@ -147,7 +147,7 @@ class TaskSelectionActivity : AppCompatActivity() {
     private fun onIndividualTaskSelected(taskId: String, taskConfig: TaskConfig) {
         Log.d("TaskSelection", "Individual task selected: $taskId - ${taskConfig.label}")
 
-        // TODO: Navigate to Task Control Screen (ColorDisplayActivity for now)
+        // Navigate to Task Control Screen (ColorDisplayActivity for now)
         val intent = Intent(this, ColorDisplayActivity::class.java).apply {
             putExtra("TASK_ID", taskId)
             putExtra("TASK_LABEL", taskConfig.label)
@@ -232,7 +232,8 @@ class TaskSelectionActivity : AppCompatActivity() {
             private val textTimeout: TextView = itemView.findViewById(R.id.text_task_timeout)
 
             fun bind(taskId: String, taskConfig: TaskConfig) {
-                textTitle.text = taskConfig.label
+                // Show task number and label (e.g., "Task 1: Navigation Setup")
+                textTitle.text = "Task $taskId: ${taskConfig.label}"
                 textDescription.text = taskConfig.text
                 textTimeout.text = "Timeout: ${taskConfig.timeoutSeconds}s"
 
