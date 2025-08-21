@@ -390,10 +390,17 @@ class ProjectorNetworkService(
      * ENHANCED: Better session management and response handling
      */
     private suspend fun handleHandshake(message: HandshakeMessage) {
+        Log.d(TAG, "🎯 HANDSHAKE RECEIVED - SERVICE INSTANCE: ${this.hashCode()}")
+        Log.d(TAG, "🎯 SERVER PORT: ${getServerPort()}")
+        Log.d(TAG, "🎯 Master device: ${message.masterDeviceId}")
+        Log.d(TAG, "🎯 Session ID: ${message.sessionId}")
         Log.d(TAG, "Received handshake from Master: ${message.masterDeviceId}")
 
         currentSessionId = message.sessionId
         masterDeviceId = message.masterDeviceId
+
+        Log.d(TAG, "🎯 SESSION ESTABLISHED: $currentSessionId")
+        Log.d(TAG, "🎯 SERVICE INSTANCE WITH SESSION: ${this.hashCode()}")
 
         Log.d(TAG, "Session established: $currentSessionId with Master: $masterDeviceId")
 

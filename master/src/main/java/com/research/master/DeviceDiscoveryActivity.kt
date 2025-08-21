@@ -29,6 +29,7 @@ import androidx.appcompat.app.AlertDialog
 /**
  * Activity for discovering and connecting to Projector devices
  * Loads configuration on startup and manages device connections
+ * FIXED: Now properly calls startSession() after successful connection
  */
 class DeviceDiscoveryActivity : AppCompatActivity() {
 
@@ -210,6 +211,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
     /**
      * Attempt manual connection
+     * FIXED: Now properly calls startSession() after successful connection
      */
     private fun attemptManualConnection() {
         // First check if configuration is ready
@@ -282,12 +284,18 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             try {
                 val success = networkClient.connectToDevice(manualDevice)
                 if (success) {
-                    Log.d("MasterNetwork", "Manual connection successful!")
+                    Log.d("MasterNetwork", "Manual connection successful - starting session")
+
+                    // ✅ CRITICAL FIX: Start session to send handshake
+                    val sessionId = networkClient.startSession()
+                    NetworkManager.setCurrentSessionId(sessionId)
+
+                    Log.d("MasterNetwork", "Session started: $sessionId")
 
                     // Save last successful connection
                     saveLastConnection(ipAddress, port)
 
-                    // Wait a moment for connection to stabilize
+                    // Wait for handshake to be processed by Projector
                     kotlinx.coroutines.delay(500)
 
                     // Show success message
@@ -441,6 +449,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
     /**
      * Connect to discovered device
+     * FIXED: Now properly calls startSession() after successful connection
      */
     private fun connectToDevice(device: MasterNetworkClient.DiscoveredDevice) {
         if (!MasterConfigManager.isConfigurationReady()) {
@@ -452,7 +461,15 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             try {
                 val success = networkClient.connectToDevice(device)
                 if (success) {
-                    // Wait a moment for connection to stabilize
+                    Log.d("MasterNetwork", "NSD connection successful - starting session")
+
+                    // ✅ CRITICAL FIX: Start session to send handshake
+                    val sessionId = networkClient.startSession()
+                    NetworkManager.setCurrentSessionId(sessionId)
+
+                    Log.d("MasterNetwork", "Session started: $sessionId")
+
+                    // Wait for handshake to be processed by Projector
                     kotlinx.coroutines.delay(500)
 
                     navigateToParticipantInfo()

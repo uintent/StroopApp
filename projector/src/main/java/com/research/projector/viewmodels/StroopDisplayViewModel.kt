@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import android.util.Log
 
 /**
  * Enhanced ViewModel for StroopDisplayActivity
@@ -686,8 +687,20 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
      * Send detailed Stroop started message to Master
      */
     private fun sendStroopStartedToMaster(timedStimulus: TimedStroopStimulus) {
+        Log.d("StroopDisplay", "=== ATTEMPTING TO SEND MESSAGE ===")
+        Log.d("StroopDisplay", "Network service available: ${networkService != null}")
+
+
         try {
             val sessionId = networkService?.getCurrentSessionId() ?: return
+            Log.d("StroopDisplay", "Session ID: $sessionId")
+            Log.d("StroopDisplay", "Is connected: ${networkService?.isConnected()}")
+
+            if (sessionId == null) {
+                Log.e("StroopDisplay", "❌ No session ID - cannot send message")
+                return
+            }
+
             val taskId = currentTaskId ?: return
 
             val hexColor = String.format("#%06X", (0xFFFFFF and timedStimulus.stimulus.displayColor))
@@ -705,6 +718,17 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
             viewModelScope.launch {
                 networkService?.sendMessage(stroopStarted)
                 android.util.Log.d("StroopDisplay", "Sent StroopStarted to Master: ${timedStimulus.stimulus.colorWord}")
+            }
+
+            Log.d("StroopDisplay", "Message to send: $stroopStarted")
+
+            viewModelScope.launch {
+                try {
+                    networkService?.sendMessage(stroopStarted)
+                    Log.d("StroopDisplay", "✅ Message sent successfully to Master")
+                } catch (e: Exception) {
+                    Log.e("StroopDisplay", "❌ Failed to send message to Master", e)
+                }
             }
 
         } catch (e: Exception) {

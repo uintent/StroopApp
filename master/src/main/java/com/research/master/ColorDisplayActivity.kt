@@ -13,6 +13,9 @@ import com.research.shared.network.StroopDisplayMessage
 import com.research.shared.network.StroopHiddenMessage
 import com.research.shared.network.HeartbeatMessage
 import com.research.shared.network.HandshakeResponseMessage
+// ADDED: Missing imports for new message types
+import com.research.shared.network.StroopStartedMessage
+import com.research.shared.network.StroopEndedMessage
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -22,6 +25,7 @@ import androidx.core.content.ContextCompat
 /**
  * Task Control Screen - displays task information and provides controls for task execution
  * Shows current Stroop word from Projector and allows moderator to control task flow
+ * FIXED: Added missing imports and removed duplicate methods
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
@@ -220,40 +224,128 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun observeNetworkMessages() {
-        lifecycleScope.launch {
-            networkClient.receiveMessages().collectLatest { message ->
-                // Only process messages if activity is resumed
-                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-                    Log.d("TaskControl", "Received message: $message")
+        Log.d("TaskControl", "=== SETTING UP MESSAGE LISTENER ===")
+        Log.d("TaskControl", "NetworkClient: ${networkClient::class.java.simpleName}")
+        Log.d("TaskControl", "Connection state: ${NetworkManager.isConnected()}")
+        Log.d("TaskControl", "Current session ID: $currentSessionId")
 
-                    when (message) {
-                        is StroopDisplayMessage -> {
-                            handleStroopDisplay(message)
+        lifecycleScope.launch {
+            Log.d("TaskControl", "Starting message collection coroutine...")
+            try {
+                networkClient.receiveMessages().collectLatest { message ->
+                    Log.d("TaskControl", "🔥 MESSAGE RECEIVED FROM PROJECTOR 🔥")
+                    Log.d("TaskControl", "Message type: ${message::class.java.simpleName}")
+                    Log.d("TaskControl", "Message content: $message")
+                    Log.d("TaskControl", "Activity lifecycle state: ${lifecycle.currentState}")
+
+                    // Only process messages if activity is resumed
+                    if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                        Log.d("TaskControl", "✅ Processing message (activity resumed)")
+
+                        when (message) {
+                            // NEW: Handle enhanced Stroop messages from updated Projector
+                            is StroopStartedMessage -> {
+                                Log.d("TaskControl", "📝 Handling StroopStartedMessage")
+                                handleStroopStarted(message)
+                            }
+                            is StroopEndedMessage -> {
+                                Log.d("TaskControl", "🏁 Handling StroopEndedMessage")
+                                handleStroopEnded(message)
+                            }
+
+                            // LEGACY: Keep old message handlers for compatibility
+                            is StroopDisplayMessage -> {
+                                Log.d("TaskControl", "📺 Handling legacy StroopDisplayMessage")
+                                handleStroopDisplay(message)
+                            }
+                            is StroopHiddenMessage -> {
+                                Log.d("TaskControl", "🙈 Handling StroopHiddenMessage")
+                                handleStroopHidden()
+                            }
+
+                            // Connection management messages
+                            is HeartbeatMessage -> {
+                                Log.d("TaskControl", "💓 Ignoring heartbeat message")
+                                // Ignore heartbeats - they're just for connection monitoring
+                            }
+                            is HandshakeResponseMessage -> {
+                                Log.d("TaskControl", "🤝 Ignoring handshake response")
+                                // Ignore handshake responses - they're handled by the connection logic
+                            }
+                            else -> {
+                                Log.d("TaskControl", "🔄 Forwarding to TaskControlManager: ${message::class.simpleName}")
+                                // Let task control manager handle task-related messages
+                                taskControlManager.handleTaskMessage(message)
+                                Log.d("TaskControl", "Message handled by TaskControlManager: ${message::class.simpleName}")
+                            }
                         }
-                        is StroopHiddenMessage -> {
-                            handleStroopHidden()
-                        }
-                        is HeartbeatMessage -> {
-                            // Ignore heartbeats - they're just for connection monitoring
-                        }
-                        is HandshakeResponseMessage -> {
-                            // Ignore handshake responses - they're handled by the connection logic
-                        }
-                        else -> {
-                            // Let task control manager handle task-related messages
-                            taskControlManager.handleTaskMessage(message)
-                            Log.d("TaskControl", "Message handled by TaskControlManager: ${message::class.simpleName}")
-                        }
+                    } else {
+                        Log.w("TaskControl", "⚠️ Activity not resumed, ignoring message: ${message::class.simpleName}")
+                        Log.w("TaskControl", "Current state: ${lifecycle.currentState}, Required: ${androidx.lifecycle.Lifecycle.State.RESUMED}")
                     }
-                } else {
-                    Log.d("TaskControl", "Activity not resumed, ignoring message: ${message::class.simpleName}")
                 }
+            } catch (e: Exception) {
+                Log.e("TaskControl", "❌ CRITICAL ERROR in message listener", e)
+                Log.e("TaskControl", "Exception type: ${e::class.java.simpleName}")
+                Log.e("TaskControl", "Exception message: ${e.message}")
+                e.printStackTrace()
             }
+
+            Log.w("TaskControl", "⚠️ Message collection coroutine ended - this should not happen!")
+        }
+
+        Log.d("TaskControl", "=== MESSAGE LISTENER SETUP COMPLETE ===")
+    }
+
+    /**
+     * NEW: Handle enhanced Stroop started message from updated Projector
+     */
+    private fun handleStroopStarted(message: StroopStartedMessage) {
+        Log.d("TaskControl", "Stroop started: index=${message.stroopIndex}, word='${message.word}', correctAnswer='${message.correctAnswer}'")
+
+        currentStroopWord = message.correctAnswer
+        isStroopActive = true
+
+        // Display the word participant should say with optimal font size
+        displayWordWithOptimalSize(message.correctAnswer)
+
+        // Update status with enhanced information
+        binding.textStroopStatus.text = "Stroop #${message.stroopIndex} Active - Listening for response"
+
+        // Activate response buttons
+        setResponseButtonsState(true)
+
+        Log.d("TaskControl", "UI updated for enhanced Stroop display")
+    }
+
+    /**
+     * NEW: Handle Stroop ended message from updated Projector
+     */
+    private fun handleStroopEnded(message: StroopEndedMessage) {
+        Log.d("TaskControl", "Stroop ended: index=${message.stroopIndex}, reason=${message.endReason}, duration=${message.displayDuration}ms")
+
+        isStroopActive = false
+
+        // If no response was recorded, keep buttons active for 1 second grace period
+        if (responseButtonsActive) {
+            // Schedule deactivation after 1 second
+            binding.root.postDelayed({
+                if (!isStroopActive) { // Only deactivate if no new stroop started
+                    setResponseButtonsState(false)
+                    showWaitingForStroop()
+                }
+            }, 1000)
+        } else {
+            showWaitingForStroop()
         }
     }
 
+    /**
+     * LEGACY: Handle old Stroop display message format (for compatibility)
+     * FIXED: Removed duplicate - keeping only this enhanced version
+     */
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
-        Log.d("TaskControl", "Stroop displayed: word=${message.word}, correctAnswer=${message.correctAnswer}")
+        Log.d("TaskControl", "Legacy Stroop displayed: word=${message.word}, correctAnswer=${message.correctAnswer}")
 
         currentStroopWord = message.correctAnswer
         isStroopActive = true
@@ -267,7 +359,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Activate response buttons
         setResponseButtonsState(true)
 
-        Log.d("TaskControl", "UI updated for Stroop display")
+        Log.d("TaskControl", "UI updated for legacy Stroop display")
     }
 
     private fun handleStroopHidden() {
@@ -288,6 +380,8 @@ class ColorDisplayActivity : AppCompatActivity() {
             showWaitingForStroop()
         }
     }
+
+    // ... rest of the methods remain the same ...
 
     private fun displayWordWithOptimalSize(word: String) {
         // Set the word
