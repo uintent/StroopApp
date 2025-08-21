@@ -2,6 +2,7 @@ package com.research.master
 
 import android.graphics.Color
 import android.os.Bundle
+import android.util.TypedValue
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.research.master.databinding.ActivityColorDisplayBinding
@@ -16,10 +17,11 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
 import com.google.android.material.snackbar.Snackbar
+import androidx.core.content.ContextCompat
 
 /**
  * Task Control Screen - displays task information and provides controls for task execution
- * Shows current Stroop color from Projector and allows moderator to control task flow
+ * Shows current Stroop word from Projector and allows moderator to control task flow
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
@@ -35,8 +37,10 @@ class ColorDisplayActivity : AppCompatActivity() {
     private var isIndividualTask: Boolean = true
 
     // Task state
-    private var currentStroopColor: String? = null
+    private var currentStroopWord: String? = null
     private var currentSessionId: String? = null
+    private var isStroopActive = false
+    private var responseButtonsActive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +54,8 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Get task information from intent
         extractTaskInfo()
 
-        // Set up toolbar
+        // Set up custom toolbar (THIS FIXES THE DOUBLE TOOLBAR ISSUE)
+        setSupportActionBar(binding.toolbar)
         supportActionBar?.title = taskLabel ?: "Task Control"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
@@ -88,7 +93,6 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun setupTaskInfo() {
-        // Use new task info views
         binding.textTaskTitle.text = taskLabel ?: "Unknown Task"
         binding.textTaskDescription.text = taskText ?: "No description available"
         binding.textTaskTimeout.text = "Timeout: ${taskTimeout}s"
@@ -112,7 +116,7 @@ class ColorDisplayActivity : AppCompatActivity() {
 
         // Initial button states
         updateButtonStates(TaskState.Ready)
-        hideResponseButtons()
+        setResponseButtonsState(false)
     }
 
     private fun observeTaskState() {
@@ -249,70 +253,145 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
-        Log.d("TaskControl", "Stroop displayed: word=${message.word}, color=${message.displayColor}")
+        Log.d("TaskControl", "Stroop displayed: word=${message.word}, correctAnswer=${message.correctAnswer}")
 
-        try {
-            val color = Color.parseColor(message.displayColor)
-            currentStroopColor = message.displayColor
+        currentStroopWord = message.correctAnswer
+        isStroopActive = true
 
-            // Update color display using new view IDs
-            binding.viewCurrentColor.setBackgroundColor(color)
+        // Display the word participant should say with optimal font size
+        displayWordWithOptimalSize(message.correctAnswer)
 
-            // Show what color the participant should say (the correct answer)
-            binding.textCurrentColor.text = message.correctAnswer
-            binding.textStroopStatus.text = "Stroop Active - Listening for response"
+        // Update status
+        binding.textStroopStatus.text = "Stroop Active - Listening for response"
 
-            // Show response buttons
-            showResponseButtons()
+        // Activate response buttons
+        setResponseButtonsState(true)
 
-            Log.d("TaskControl", "UI updated for Stroop display")
-
-        } catch (e: Exception) {
-            Log.e("TaskControl", "Error parsing color: ${message.displayColor}", e)
-            binding.textStroopStatus.text = "Error: Invalid color format"
-        }
+        Log.d("TaskControl", "UI updated for Stroop display")
     }
 
     private fun handleStroopHidden() {
         Log.d("TaskControl", "Stroop hidden")
-        hideResponseButtons()
-        showWaitingForStroop()
+
+        isStroopActive = false
+
+        // If no response was recorded, keep buttons active for 1 second grace period
+        if (responseButtonsActive) {
+            // Schedule deactivation after 1 second
+            binding.root.postDelayed({
+                if (!isStroopActive) { // Only deactivate if no new stroop started
+                    setResponseButtonsState(false)
+                    showWaitingForStroop()
+                }
+            }, 1000)
+        } else {
+            showWaitingForStroop()
+        }
+    }
+
+    private fun displayWordWithOptimalSize(word: String) {
+        // Set the word
+        binding.textCurrentColor.text = word
+
+        // Calculate optimal font size after layout is complete
+        binding.textCurrentColor.post {
+            val optimalSize = calculateOptimalFontSize(word, binding.textCurrentColor.width, binding.textCurrentColor.height)
+            binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, optimalSize)
+        }
+
+        Log.d("TaskControl", "Displaying word '$word'")
+    }
+
+    private fun calculateOptimalFontSize(text: String, availableWidth: Int, availableHeight: Int): Float {
+        if (availableWidth <= 0 || availableHeight <= 0) {
+            return 48f // Default size if dimensions not available yet
+        }
+
+        val paint = binding.textCurrentColor.paint
+        var testSize = 100f // Start with large size
+        val maxSize = 100f
+        val minSize = 16f
+
+        // Account for padding
+        val usableWidth = availableWidth * 0.8f
+        val usableHeight = availableHeight * 0.8f
+
+        // Binary search for optimal size
+        var low = minSize
+        var high = maxSize
+
+        while (high - low > 1) {
+            testSize = (low + high) / 2
+            paint.textSize = testSize * resources.displayMetrics.scaledDensity
+
+            val textWidth = paint.measureText(text)
+            val textHeight = paint.fontMetrics.let { it.bottom - it.top }
+
+            if (textWidth <= usableWidth && textHeight <= usableHeight) {
+                low = testSize
+            } else {
+                high = testSize
+            }
+        }
+
+        return low
+    }
+
+    private fun setResponseButtonsState(active: Boolean) {
+        responseButtonsActive = active
+
+        binding.btnResponseCorrect.isEnabled = active
+        binding.btnResponseIncorrect.isEnabled = active
+
+        if (active) {
+            // Set active colors
+            binding.btnResponseCorrect.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+            binding.btnResponseIncorrect.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+            binding.btnResponseCorrect.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+            binding.btnResponseIncorrect.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+        } else {
+            // Set disabled colors
+            val disabledColor = ContextCompat.getColor(this, android.R.color.darker_gray)
+            binding.btnResponseCorrect.setBackgroundColor(disabledColor)
+            binding.btnResponseIncorrect.setBackgroundColor(disabledColor)
+            binding.btnResponseCorrect.setTextColor(ContextCompat.getColor(this, android.R.color.black))
+            binding.btnResponseIncorrect.setTextColor(ContextCompat.getColor(this, android.R.color.black))
+        }
     }
 
     private fun showTaskReady() {
-        binding.viewCurrentColor.setBackgroundColor(Color.LTGRAY)
         binding.textStroopStatus.text = "Task ready - Press START to begin"
         binding.textCurrentColor.text = "Waiting..."
-        currentStroopColor = null
-        hideResponseButtons()
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 48f)
+        currentStroopWord = null
+        isStroopActive = false
+        setResponseButtonsState(false)
     }
 
     private fun showWaitingForStroop() {
-        binding.viewCurrentColor.setBackgroundColor(Color.DKGRAY)
         binding.textStroopStatus.text = "Task active - Waiting for next Stroop"
         binding.textCurrentColor.text = "Interval period"
-        currentStroopColor = null
-        hideResponseButtons()
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+        currentStroopWord = null
+        setResponseButtonsState(false)
     }
 
     private fun showNotConnected() {
-        binding.viewCurrentColor.setBackgroundColor(Color.RED)
         binding.textStroopStatus.text = "Not Connected to Projector"
         binding.textCurrentColor.text = "Please reconnect"
 
         // Disable all control buttons
         updateButtonStates(TaskState.Error("CONNECTION_ERROR", "Not connected"))
-        hideResponseButtons()
+        setResponseButtonsState(false)
     }
 
     private fun showSessionError() {
-        binding.viewCurrentColor.setBackgroundColor(Color.RED)
         binding.textStroopStatus.text = "No Session Available"
         binding.textCurrentColor.text = "Please restart from participant info"
 
         // Disable all control buttons
         updateButtonStates(TaskState.Error("SESSION_ERROR", "No session"))
-        hideResponseButtons()
+        setResponseButtonsState(false)
 
         Snackbar.make(
             binding.root,
@@ -321,23 +400,15 @@ class ColorDisplayActivity : AppCompatActivity() {
         ).show()
     }
 
-    private fun showResponseButtons() {
-        binding.layoutResponseButtons.visibility = android.view.View.VISIBLE
-    }
-
-    private fun hideResponseButtons() {
-        binding.layoutResponseButtons.visibility = android.view.View.GONE
-    }
-
     private fun recordParticipantResponse(isCorrect: Boolean) {
         val responseType = if (isCorrect) "CORRECT" else "INCORRECT"
-        Log.d("TaskControl", "Recording participant response: $responseType for color: $currentStroopColor")
+        Log.d("TaskControl", "Recording participant response: $responseType for word: $currentStroopWord")
 
         // TODO: Send participant response to data collection system
         // This data will be used for calculating error rates and reaction times
 
-        // Hide response buttons after recording
-        hideResponseButtons()
+        // Immediately deactivate response buttons
+        setResponseButtonsState(false)
 
         // Show feedback
         val message = if (isCorrect) {
