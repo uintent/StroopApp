@@ -2,13 +2,14 @@ package com.research.master.network
 
 import android.util.Log
 import com.research.shared.network.*
+import com.research.shared.models.RuntimeConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Handles task control message sending and response handling
- * Extends the basic network functionality with task management
+ * FIXED VERSION - Now sends real network messages instead of placeholders
  */
 class TaskControlNetworkManager(
     private val networkClient: MasterNetworkClient
@@ -24,97 +25,55 @@ class TaskControlNetworkManager(
     /**
      * Start a task on the Projector
      * FR-TM-001: Manual task start/stop
+     * FIXED: Now sends actual StartTaskMessage
      */
     suspend fun startTask(
         taskId: String,
         taskLabel: String,
         taskTimeoutMs: Long,
-        sessionId: String
+        sessionId: String,
+        runtimeConfig: RuntimeConfig? = null
     ): Boolean {
         return try {
-            // For now, create a simple message structure
-            // TODO: Replace with actual StartTaskMessage when implemented on Projector side
-            val message = mapOf(
-                "messageType" to "START_TASK",
-                "taskId" to taskId,
-                "taskLabel" to taskLabel,
-                "taskTimeoutMs" to taskTimeoutMs,
-                "stroopDisplayDurationMs" to 2000L, // Default 2 seconds
-                "stroopMinIntervalMs" to 1000L,    // Default 1 second
-                "stroopMaxIntervalMs" to 3000L,    // Default 3 seconds
-                "sessionId" to sessionId
+            Log.d("TaskControl", "Starting task: $taskId with timeout: ${taskTimeoutMs}ms")
+
+            // Create timing parameters from config or defaults
+            val timing = runtimeConfig?.getEffectiveTiming() ?: run {
+                Log.w("TaskControl", "No runtime config provided, using defaults")
+                com.research.shared.models.TimingConfig(
+                    stroopDisplayDuration = 2000,
+                    minInterval = 1000,
+                    maxInterval = 3000,
+                    countdownDuration = 4000
+                )
+            }
+
+            // Create and send StartTaskMessage
+            val startMessage = StartTaskMessage(
+                sessionId = sessionId,
+                taskId = taskId,
+                taskLabel = taskLabel,
+                timeoutSeconds = (taskTimeoutMs / 1000).toInt(),
+                stroopSettings = StroopSettings(
+                    displayDurationMs = timing.stroopDisplayDuration.toLong(),
+                    minIntervalMs = timing.minInterval.toLong(),
+                    maxIntervalMs = timing.maxInterval.toLong(),
+                    countdownDurationMs = timing.countdownDuration * 1000L,
+                    colors = runtimeConfig?.baseConfig?.getColorWords() ?: listOf("rot", "blau", "grün", "gelb"),
+                    language = "de-DE"
+                )
             )
 
-            // TODO: Use actual message sending when StartTaskMessage is implemented
-            // val success = networkClient.sendMessage(StartTaskMessage(...))
-
-            // For now, just log the attempt
-            Log.d("TaskControl", "START_TASK would be sent for task: $taskId")
+            networkClient.sendMessage(startMessage)
             _currentTaskState.value = TaskState.Starting(taskId, taskLabel)
 
-            // Simulate success for now
+            Log.d("TaskControl", "START_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
             Log.e("TaskControl", "Error starting task", e)
             _lastTaskError.value = "Error starting task: ${e.message}"
-            false
-        }
-    }
-
-    /**
-     * Pause the current task
-     */
-    suspend fun pauseTask(taskId: String, sessionId: String): Boolean {
-        return try {
-            // TODO: Replace with actual PauseTaskMessage when implemented
-            Log.d("TaskControl", "PAUSE_TASK would be sent for task: $taskId")
-            _currentTaskState.value = TaskState.Paused(taskId, System.currentTimeMillis())
-
-            // Simulate success for now
-            true
-
-        } catch (e: Exception) {
-            Log.e("TaskControl", "Error pausing task", e)
-            _lastTaskError.value = "Error pausing task: ${e.message}"
-            false
-        }
-    }
-
-    /**
-     * Resume a paused task
-     */
-    suspend fun resumeTask(taskId: String, sessionId: String): Boolean {
-        return try {
-            // TODO: Replace with actual ResumeTaskMessage when implemented
-            Log.d("TaskControl", "RESUME_TASK would be sent for task: $taskId")
-            _currentTaskState.value = TaskState.Active(taskId, System.currentTimeMillis())
-
-            // Simulate success for now
-            true
-
-        } catch (e: Exception) {
-            Log.e("TaskControl", "Error resuming task", e)
-            _lastTaskError.value = "Error resuming task: ${e.message}"
-            false
-        }
-    }
-
-    /**
-     * Reset/cancel the current task
-     */
-    suspend fun resetTask(taskId: String, sessionId: String): Boolean {
-        return try {
-            // TODO: Replace with actual ResetTaskMessage when implemented
-            Log.d("TaskControl", "RESET_TASK would be sent for task: $taskId")
-            _currentTaskState.value = TaskState.Ready
-
-            // Simulate success for now
-            true
-
-        } catch (e: Exception) {
-            Log.e("TaskControl", "Error resetting task", e)
-            _lastTaskError.value = "Error resetting task: ${e.message}"
+            _currentTaskState.value = TaskState.Error("START_FAILED", e.message ?: "Unknown error")
             false
         }
     }
@@ -122,6 +81,7 @@ class TaskControlNetworkManager(
     /**
      * End the current task with a specific condition
      * FR-TM-005: Manual end condition setting
+     * FIXED: Now sends actual EndTaskMessage
      */
     suspend fun endTask(
         taskId: String,
@@ -129,11 +89,28 @@ class TaskControlNetworkManager(
         sessionId: String
     ): Boolean {
         return try {
-            // TODO: Replace with actual EndTaskMessage when implemented
-            Log.d("TaskControl", "END_TASK would be sent for task: $taskId with condition: $endCondition")
+            Log.d("TaskControl", "Ending task: $taskId with condition: $endCondition")
+
+            // Map end condition to EndReason
+            val endReason = when (endCondition.lowercase()) {
+                "success" -> EndReason.COMPLETED
+                "failed" -> EndReason.CANCELLED
+                "partial success" -> EndReason.CANCELLED
+                "timeout" -> EndReason.TIMEOUT
+                else -> EndReason.CANCELLED
+            }
+
+            // Create and send EndTaskMessage
+            val endMessage = EndTaskMessage(
+                sessionId = sessionId,
+                taskId = taskId,
+                reason = endReason
+            )
+
+            networkClient.sendMessage(endMessage)
             _currentTaskState.value = TaskState.Completed(taskId, endCondition, System.currentTimeMillis())
 
-            // Simulate success for now
+            Log.d("TaskControl", "END_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
@@ -144,58 +121,139 @@ class TaskControlNetworkManager(
     }
 
     /**
-     * Start voice recognition calibration
-     * FR-TM-021: Voice Recognition System Check
+     * Reset/cancel the current task
+     * FIXED: Now sends actual TaskResetCommand
      */
-    suspend fun startVoiceCalibration(sessionId: String): Boolean {
+    suspend fun resetTask(taskId: String, sessionId: String): Boolean {
         return try {
-            // TODO: Replace with actual StartVoiceCalibrationMessage when implemented
-            Log.d("TaskControl", "VOICE_CALIBRATION would be started")
+            Log.d("TaskControl", "Resetting task: $taskId")
 
-            // Simulate success for now
+            val resetMessage = TaskResetCommand(sessionId = sessionId)
+            networkClient.sendMessage(resetMessage)
+            _currentTaskState.value = TaskState.Ready
+
+            Log.d("TaskControl", "RESET_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
-            Log.e("TaskControl", "Error starting voice calibration", e)
-            _lastTaskError.value = "Error starting voice calibration: ${e.message}"
+            Log.e("TaskControl", "Error resetting task", e)
+            _lastTaskError.value = "Error resetting task: ${e.message}"
             false
         }
     }
 
     /**
-     * Handle incoming task-related messages from Projector
-     * Should be called by the main message handler
+     * Pause the current task
+     * TODO: Implement when PauseTaskMessage is added to shared module
      */
-    fun handleTaskMessage(message: NetworkMessage) {
-        // TODO: Handle actual task messages when message types are implemented
-        // For now, just log unknown messages
-        Log.d("TaskControl", "Received message type: ${message::class.simpleName}")
-
-        // This will be implemented when TaskControlMessages are added to the shared module
-        /*
-        when (message) {
-            is TaskStartedMessage -> {
-                _currentTaskState.value = TaskState.CountdownActive(message.taskId, message.countdownStartTime)
-                Log.d("TaskControl", "Task started: ${message.taskId}")
-            }
-
-            is TaskActiveMessage -> {
-                _currentTaskState.value = TaskState.Active(message.taskId, message.taskStartTime)
-                Log.d("TaskControl", "Task active: ${message.taskId}")
-            }
-
-            // ... other message handlers
-        }
-        */
+    suspend fun pauseTask(taskId: String, sessionId: String): Boolean {
+        Log.w("TaskControl", "Pause task not yet implemented - PauseTaskMessage needed in shared module")
+        return false
     }
 
     /**
-     * Process completed task results and save to session
+     * Resume a paused task
+     * TODO: Implement when ResumeTaskMessage is added to shared module
      */
-    private suspend fun processTaskResults(completedMessage: Any) {
-        // TODO: Convert to SessionManager.TaskCompletionData and save
-        // This will be implemented when SessionManager is integrated
-        Log.d("TaskControl", "Processing task results - placeholder")
+    suspend fun resumeTask(taskId: String, sessionId: String): Boolean {
+        Log.w("TaskControl", "Resume task not yet implemented - ResumeTaskMessage needed in shared module")
+        return false
+    }
+
+    /**
+     * Start voice recognition calibration
+     * FR-TM-021: Voice Recognition System Check
+     * TODO: Implement when VoiceCalibrationMessage is added to shared module
+     */
+    suspend fun startVoiceCalibration(sessionId: String): Boolean {
+        Log.w("TaskControl", "Voice calibration not yet implemented - VoiceCalibrationMessage needed")
+        return false
+    }
+
+    /**
+     * Handle incoming task-related messages from Projector
+     * FIXED: Now handles real message types
+     */
+    fun handleTaskMessage(message: NetworkMessage) {
+        Log.d("TaskControl", "Handling message: ${message.messageType}")
+
+        when (message) {
+            is TaskStatusMessage -> {
+                handleTaskStatusMessage(message)
+            }
+
+            is TaskTimeoutMessage -> {
+                handleTaskTimeoutMessage(message)
+            }
+
+            is StroopResultsMessage -> {
+                handleStroopResultsMessage(message)
+            }
+
+            is ErrorMessage -> {
+                handleErrorMessage(message)
+            }
+
+            // Stroop monitoring messages - update task state
+            is StroopStartedMessage -> {
+                val currentState = _currentTaskState.value
+                if (currentState is TaskState.Starting || currentState is TaskState.CountdownActive) {
+                    _currentTaskState.value = TaskState.Active(message.taskId, System.currentTimeMillis())
+                }
+            }
+
+            else -> {
+                Log.d("TaskControl", "Unhandled message type: ${message.messageType}")
+            }
+        }
+    }
+
+    /**
+     * Handle task status updates from Projector
+     */
+    private fun handleTaskStatusMessage(message: TaskStatusMessage) {
+        Log.d("TaskControl", "Task ${message.taskId} status: ${message.status}")
+
+        val newState = when (message.status) {
+            TaskStatus.WAITING -> TaskState.Ready
+            TaskStatus.COUNTDOWN -> TaskState.CountdownActive(message.taskId, System.currentTimeMillis())
+            TaskStatus.ACTIVE -> TaskState.Active(message.taskId, System.currentTimeMillis())
+            TaskStatus.COMPLETED -> TaskState.Completed(message.taskId, "completed", System.currentTimeMillis())
+            TaskStatus.PAUSED -> TaskState.Paused(message.taskId, System.currentTimeMillis())
+            TaskStatus.ERROR -> TaskState.Error("PROJECTOR_ERROR", "Task error on projector")
+        }
+
+        _currentTaskState.value = newState
+    }
+
+    /**
+     * Handle task timeout from Projector
+     */
+    private fun handleTaskTimeoutMessage(message: TaskTimeoutMessage) {
+        Log.d("TaskControl", "Task ${message.taskId} timed out after ${message.actualDuration}ms, ${message.stroopsDisplayed} stroops shown")
+        _currentTaskState.value = TaskState.Completed(message.taskId, "Timed Out", System.currentTimeMillis())
+    }
+
+    /**
+     * Handle Stroop results from Projector
+     */
+    private fun handleStroopResultsMessage(message: StroopResultsMessage) {
+        Log.d("TaskControl", "Received Stroop results for task ${message.taskId}: ${message.totalStroops} stroops, ${message.correctResponses} correct")
+
+        // TODO: Forward to SessionManager for data persistence
+        // This will be implemented when SessionManager integration is complete
+    }
+
+    /**
+     * Handle error messages from Projector
+     */
+    private fun handleErrorMessage(message: ErrorMessage) {
+        Log.e("TaskControl", "Projector error: ${message.errorCode} - ${message.errorDescription}")
+        _lastTaskError.value = "Projector error: ${message.errorDescription}"
+
+        if (message.isFatal) {
+            _currentTaskState.value = TaskState.Error(message.errorCode, message.errorDescription)
+        }
     }
 
     /**
@@ -204,10 +262,17 @@ class TaskControlNetworkManager(
     fun clearError() {
         _lastTaskError.value = null
     }
+
+    /**
+     * Get current task state for debugging
+     */
+    fun getCurrentTaskState(): TaskState? = _currentTaskState.value
 }
 
 /**
  * Task state representation for UI
+ * ENHANCED: Added more detailed state information
+ * FIXED: Resolved JVM signature conflict by renaming method
  */
 sealed class TaskState {
     object Ready : TaskState()
@@ -217,14 +282,22 @@ sealed class TaskState {
     data class Paused(val taskId: String, val pauseTime: Long) : TaskState()
     data class Completed(val taskId: String, val endCondition: String, val endTime: Long) : TaskState()
     data class Error(val errorType: String, val errorMessage: String) : TaskState()
-}
 
-/**
- * Placeholder for Stroop configuration
- * TODO: Replace with actual config from MasterConfigManager
- */
-data class StroopConfig(
-    val stroopDisplayDuration: Int = 2000, // milliseconds
-    val stroopMinInterval: Int = 1000,     // milliseconds
-    val stroopMaxInterval: Int = 3000      // milliseconds
-)
+    /**
+     * Check if task is currently running
+     */
+    fun isActive(): Boolean = this is Active || this is CountdownActive
+
+    /**
+     * Get task ID if available
+     * FIXED: Renamed from getTaskId() to avoid JVM signature conflict with data class auto-generated getters
+     */
+    fun getTaskIdOrNull(): String? = when (this) {
+        is Starting -> taskId
+        is CountdownActive -> taskId
+        is Active -> taskId
+        is Paused -> taskId
+        is Completed -> taskId
+        else -> null
+    }
+}

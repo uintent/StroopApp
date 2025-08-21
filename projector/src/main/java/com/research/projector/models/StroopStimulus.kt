@@ -195,19 +195,20 @@ data class CountdownState(
     fun isActive(): Boolean {
         return currentNumber >= 0 && !isComplete
     }
-    
+
     /**
      * Get the next countdown state
+     * FIXED: Countdown completes when reaching 0, not when going negative
      */
     fun getNext(stepDuration: Long): CountdownState {
         val nextNumber = currentNumber - 1
-        return if (nextNumber < 0) {
+        return if (nextNumber <= 0) {  // ✅ FIXED: Complete when reaching 0 or below
             copy(currentNumber = 0, remainingTime = 0L, isComplete = true)
         } else {
             copy(currentNumber = nextNumber, remainingTime = stepDuration)
         }
     }
-    
+
     companion object {
         /**
          * Create initial countdown state
