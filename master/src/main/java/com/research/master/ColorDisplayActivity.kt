@@ -421,6 +421,7 @@ class ColorDisplayActivity : AppCompatActivity() {
 
     /**
      * Enhanced task timeout handling with comprehensive state management
+     * 🎯 ENHANCED: Uses precise message flow detection for Stroop state
      */
     private fun handleTaskTimeout(message: TaskTimeoutMessage) {
         Log.d("TaskControl", "🕒 Task timed out: ${message.taskId}")
@@ -436,16 +437,36 @@ class ColorDisplayActivity : AppCompatActivity() {
             return
         }
 
-        // Handle UI updates with appropriate delay for active Stroops
-        if (isStroopActive && currentStroopWord != null) {
-            Log.d("TaskControl", "Stroop currently active - delaying timeout UI for 1 second")
+        // 🎯 ENHANCED: Set timeout flag immediately to prevent further processing
+        isTaskTimedOut = true
+
+        // 🎯 PRECISE DETECTION: Scenario 2 = Stroop was started but not ended yet
+        // This means: StroopStartedMessage received, but no StroopEndedMessage yet
+        // Which is exactly what isStroopActive && currentStroopWord != null represents!
+        val isStroopActiveAtTimeout = isStroopActive && currentStroopWord != null
+
+        if (isStroopActiveAtTimeout) {
+            Log.d("TaskControl", "🎯 SCENARIO 2: Timeout during active Stroop display")
+            Log.d("TaskControl", "- StroopStarted was received: ✅")
+            Log.d("TaskControl", "- StroopEnded was NOT received yet: ❌")
+            Log.d("TaskControl", "- Current Stroop word: '$currentStroopWord'")
+            Log.d("TaskControl", "- Keeping response buttons active for 1 second grace period")
+
+            // Immediately disable all control buttons but keep response buttons active
+            disableControlButtonsOnly()
+
+            // Show timeout status but keep Stroop word visible
+            binding.textStroopStatus.text = "Task Timeout - Final response window"
+
+            // Schedule full timeout UI after 1 second
             binding.root.postDelayed({
-                if (!isTaskTimedOut) { // Double-check to prevent race conditions
-                    showTaskTimeout(message)
-                }
+                Log.d("TaskControl", "1 second grace period ended - applying full timeout UI")
+                showTaskTimeoutWithStroopEnded(message)
             }, 1000) // 1 second delay
         } else {
-            Log.d("TaskControl", "No active Stroop - showing timeout UI immediately")
+            Log.d("TaskControl", "🎯 SCENARIO 1: Timeout during interval or no active Stroop")
+            Log.d("TaskControl", "- Either no Stroop was active, or StroopEnded was already received")
+            Log.d("TaskControl", "- Showing timeout UI immediately")
             showTaskTimeout(message)
         }
 
@@ -465,37 +486,37 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * Show task timeout state
+     * Show task timeout state (immediate - no active Stroop)
      */
     private fun showTaskTimeout(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "Showing task timeout UI")
-
-        isTaskTimedOut = true
+        Log.d("TaskControl", "Showing task timeout UI immediately")
 
         // Update status
         binding.textStroopStatus.text = "Task Timeout Reached"
 
-        // Clear current Stroop display
-        binding.textCurrentColor.text = "Task Completed"
+        // 🎯 Show "Task ended" instead of "Task Completed"
+        binding.textCurrentColor.text = "Task ended"
         binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
 
-        // Disable all task control buttons
-        binding.btnTriggerStroop.isEnabled = false
-        binding.btnPauseTask.isEnabled = false
-        binding.btnResumeTask.isEnabled = false
-        binding.btnResetTask.isEnabled = false
+        // Hide all task control buttons
+        binding.btnTriggerStroop.visibility = View.GONE
+        binding.btnPauseTask.visibility = View.GONE
+        binding.btnResumeTask.visibility = View.GONE
+        binding.btnResetTask.visibility = View.GONE
 
-        // Disable task completion buttons (they're no longer relevant)
-        binding.btnTaskSuccess.isEnabled = false
-        binding.btnTaskFailed.isEnabled = false
-        binding.btnTaskGivenUp.isEnabled = false
+        // Hide task completion buttons
+        binding.btnTaskSuccess.visibility = View.GONE
+        binding.btnTaskFailed.visibility = View.GONE
+        binding.btnTaskGivenUp.visibility = View.GONE
 
         // Disable response buttons
         setResponseButtonsState(false)
 
-        // Show return button
+        // Show and enable return button with distinctive styling
         binding.btnReturnToTasks.visibility = View.VISIBLE
         binding.btnReturnToTasks.isEnabled = true
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
 
         // Show timeout notification
         val timeoutSeconds = message.actualDuration / 1000
@@ -511,6 +532,70 @@ class ColorDisplayActivity : AppCompatActivity() {
         responseButtonsActive = false
 
         Log.d("TaskControl", "Task timeout UI setup complete")
+    }
+
+    /**
+     * 🎯 NEW: Hide all control buttons, keep response buttons active during grace period
+     */
+    private fun disableControlButtonsOnly() {
+        Log.d("TaskControl", "Hiding control buttons only (keeping response buttons active)")
+
+        // Hide all task control buttons
+        binding.btnTriggerStroop.visibility = View.GONE
+        binding.btnPauseTask.visibility = View.GONE
+        binding.btnResumeTask.visibility = View.GONE
+        binding.btnResetTask.visibility = View.GONE
+
+        // Hide task completion buttons
+        binding.btnTaskSuccess.visibility = View.GONE
+        binding.btnTaskFailed.visibility = View.GONE
+        binding.btnTaskGivenUp.visibility = View.GONE
+
+        // Keep response buttons active and visible - don't change them here
+        // They will be handled by the 1-second grace period
+
+        // Show return button but don't enable it yet (wait for full timeout)
+        binding.btnReturnToTasks.visibility = View.VISIBLE
+        binding.btnReturnToTasks.isEnabled = false
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.black))
+    }
+
+    /**
+     * 🎯 NEW: Show timeout UI after Stroop grace period ended
+     */
+    private fun showTaskTimeoutWithStroopEnded(message: TaskTimeoutMessage) {
+        Log.d("TaskControl", "Showing task timeout UI after Stroop grace period")
+
+        // Update status
+        binding.textStroopStatus.text = "Task Timeout Reached"
+
+        // 🎯 Change Stroop display to "Task ended" instead of "Task Completed"
+        binding.textCurrentColor.text = "Task ended"
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+
+        // Now disable response buttons (grace period over)
+        setResponseButtonsState(false)
+
+        // Enable return button with proper styling (make it distinctive)
+        binding.btnReturnToTasks.isEnabled = true
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+        // Show timeout notification
+        val timeoutSeconds = message.actualDuration / 1000
+        Snackbar.make(
+            binding.root,
+            "Task timed out after ${timeoutSeconds}s. ${message.stroopsDisplayed} Stroops displayed.",
+            Snackbar.LENGTH_LONG
+        ).show()
+
+        // Reset state
+        isStroopActive = false
+        currentStroopWord = null
+        responseButtonsActive = false
+
+        Log.d("TaskControl", "Task timeout UI setup complete after grace period")
     }
 
     /**
