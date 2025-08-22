@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Handles task control message sending and response handling
  * FIXED VERSION - Now sends real network messages instead of placeholders
+ * SOLUTION 1: Removed TaskTimeoutMessage handling to let ColorDisplayActivity handle it directly
  */
 class TaskControlNetworkManager(
     private val networkClient: MasterNetworkClient
@@ -172,19 +173,21 @@ class TaskControlNetworkManager(
 
     /**
      * Handle incoming task-related messages from Projector
-     * FIXED: Now handles real message types
+     * SOLUTION 1 FIX: Removed TaskTimeoutMessage handling - ColorDisplayActivity handles it directly
      */
     fun handleTaskMessage(message: NetworkMessage) {
-        Log.d("TaskControl", "Handling message: ${message.messageType}")
+        Log.d("TaskControl", "TaskControlManager handling message: ${message.messageType}")
 
         when (message) {
             is TaskStatusMessage -> {
                 handleTaskStatusMessage(message)
             }
 
-            is TaskTimeoutMessage -> {
-                handleTaskTimeoutMessage(message)
-            }
+            // REMOVED: TaskTimeoutMessage handling - ColorDisplayActivity handles this directly
+            // This prevents the message from being consumed before the activity can process it
+            // is TaskTimeoutMessage -> {
+            //     handleTaskTimeoutMessage(message)
+            // }
 
             is StroopResultsMessage -> {
                 handleStroopResultsMessage(message)
@@ -203,7 +206,7 @@ class TaskControlNetworkManager(
             }
 
             else -> {
-                Log.d("TaskControl", "Unhandled message type: ${message.messageType}")
+                Log.d("TaskControl", "TaskControlManager - Unhandled message type: ${message.messageType}")
             }
         }
     }
@@ -227,12 +230,13 @@ class TaskControlNetworkManager(
     }
 
     /**
-     * Handle task timeout from Projector
+     * REMOVED: This method is no longer called since we removed TaskTimeoutMessage handling
+     * The timeout is now handled directly by ColorDisplayActivity for better UI control
      */
-    private fun handleTaskTimeoutMessage(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "Task ${message.taskId} timed out after ${message.actualDuration}ms, ${message.stroopsDisplayed} stroops shown")
-        _currentTaskState.value = TaskState.Completed(message.taskId, "Timed Out", System.currentTimeMillis())
-    }
+    // private fun handleTaskTimeoutMessage(message: TaskTimeoutMessage) {
+    //     Log.d("TaskControl", "Task ${message.taskId} timed out after ${message.actualDuration}ms, ${message.stroopsDisplayed} stroops shown")
+    //     _currentTaskState.value = TaskState.Completed(message.taskId, "Timed Out", System.currentTimeMillis())
+    // }
 
     /**
      * Handle Stroop results from Projector
@@ -254,6 +258,15 @@ class TaskControlNetworkManager(
         if (message.isFatal) {
             _currentTaskState.value = TaskState.Error(message.errorCode, message.errorDescription)
         }
+    }
+
+    /**
+     * NEW: Manual timeout handling for when ColorDisplayActivity processes timeout
+     * This allows the activity to handle UI updates while keeping state management here
+     */
+    fun notifyTaskTimeout(taskId: String, duration: Long, stroopsDisplayed: Int) {
+        Log.d("TaskControl", "Notified of task timeout: $taskId after ${duration}ms, $stroopsDisplayed stroops")
+        _currentTaskState.value = TaskState.Completed(taskId, "Timed Out", System.currentTimeMillis())
     }
 
     /**

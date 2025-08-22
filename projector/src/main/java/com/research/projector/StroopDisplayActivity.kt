@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.util.TypedValue
 import android.view.View
 import android.view.WindowManager
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -16,6 +17,7 @@ import com.research.projector.viewmodels.*
 /**
  * Activity for fullscreen Stroop stimulus display with precise timing.
  * Handles countdown, stimulus presentation, and intervals with research-grade accuracy.
+ * ENHANCED: Now supports Master-controlled task execution
  */
 class StroopDisplayActivity : AppCompatActivity() {
 
@@ -29,6 +31,16 @@ class StroopDisplayActivity : AppCompatActivity() {
     // Event tracking to prevent multiple handling
     private var lastTaskCompletionEvent: TaskCompletionEvent? = null
     private var lastErrorEvent: String? = null
+
+    // Store data for initialization
+    private var taskExecution: TaskExecutionState? = null
+    private var runtimeConfig: RuntimeConfig? = null
+    private var stroopGenerator: StroopGenerator? = null
+
+    // ✅ ADD THESE PROPERTIES FOR MASTER CONTROL:
+    private var masterControlled: Boolean = false
+    private var masterTaskId: String? = null
+    private var masterTimeoutSeconds: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +60,13 @@ class StroopDisplayActivity : AppCompatActivity() {
 
         // Set up click listeners
         setupClickListeners()
+
+        // ✅ MODERN BACK BUTTON HANDLING
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                viewModel.emergencyStop()
+            }
+        })
 
         // Get display dimensions and initialize
         binding.stroopContainer.post {
@@ -77,30 +96,32 @@ class StroopDisplayActivity : AppCompatActivity() {
 
     /**
      * Extract task execution data from intent
+     * ENHANCED: Now extracts Master control information
      */
     private fun extractIntentData() {
-        val taskExecution = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_TASK_EXECUTION) as? TaskExecutionState
-        val runtimeConfig = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_RUNTIME_CONFIG) as? RuntimeConfig
-        val stroopGenerator = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_STROOP_GENERATOR) as? StroopGenerator
+        taskExecution = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_TASK_EXECUTION) as? TaskExecutionState
+        runtimeConfig = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_RUNTIME_CONFIG) as? RuntimeConfig
+        stroopGenerator = intent.getSerializableExtra(TaskExecutionActivity.EXTRA_STROOP_GENERATOR) as? StroopGenerator
+
+        // ✅ EXTRACT MASTER CONTROL INFORMATION:
+        masterControlled = intent.getBooleanExtra("MASTER_CONTROLLED", false)
+        masterTaskId = intent.getStringExtra("MASTER_TASK_ID")
+        masterTimeoutSeconds = intent.getIntExtra("MASTER_TIMEOUT_SECONDS", 0)
+
+        android.util.Log.d("StroopDisplay", "=== INTENT DATA EXTRACTED ===")
+        android.util.Log.d("StroopDisplay", "Master controlled: $masterControlled")
+        android.util.Log.d("StroopDisplay", "Master task ID: $masterTaskId")
+        android.util.Log.d("StroopDisplay", "Master timeout: ${masterTimeoutSeconds}s")
 
         if (taskExecution == null || runtimeConfig == null || stroopGenerator == null) {
             finishWithError("Invalid task execution data received")
             return
         }
-
-        // Store for initialization
-        this.taskExecution = taskExecution
-        this.runtimeConfig = runtimeConfig
-        this.stroopGenerator = stroopGenerator
     }
-
-    // Store data for initialization
-    private var taskExecution: TaskExecutionState? = null
-    private var runtimeConfig: RuntimeConfig? = null
-    private var stroopGenerator: StroopGenerator? = null
 
     /**
      * Initialize display with task execution parameters
+     * ENHANCED: Now passes Master control information to ViewModel
      */
     private fun initializeDisplay() {
         val execution = taskExecution
@@ -108,7 +129,21 @@ class StroopDisplayActivity : AppCompatActivity() {
         val generator = stroopGenerator
 
         if (execution != null && config != null && generator != null && displayWidth > 0 && displayHeight > 0) {
-            viewModel.initialize(execution, config, generator, displayWidth, displayHeight)
+            android.util.Log.d("StroopDisplay", "=== INITIALIZING DISPLAY ===")
+            android.util.Log.d("StroopDisplay", "Passing Master control info to ViewModel:")
+            android.util.Log.d("StroopDisplay", "  - Master controlled: $masterControlled")
+            android.util.Log.d("StroopDisplay", "  - Master task ID: $masterTaskId")
+
+            // ✅ PASS MASTER CONTROL INFO TO VIEWMODEL:
+            viewModel.initialize(
+                execution,
+                config,
+                generator,
+                displayWidth,
+                displayHeight,
+                masterControlled,
+                masterTaskId
+            )
         }
     }
 
@@ -319,9 +354,16 @@ class StroopDisplayActivity : AppCompatActivity() {
      * Handle task completion
      */
     private fun handleTaskCompletion(event: TaskCompletionEvent) {
+        android.util.Log.d("StroopDisplay", "=== TASK COMPLETION HANDLED ===")
+        android.util.Log.d("StroopDisplay", "Master controlled: $masterControlled")
+        android.util.Log.d("StroopDisplay", "Task ID: ${event.completedTaskExecution.taskId}")
+
         // Return completed task execution to TaskExecutionActivity
         val resultIntent = Intent().apply {
             putExtra(TaskExecutionActivity.EXTRA_COMPLETED_TASK_EXECUTION, event.completedTaskExecution)
+            // ✅ ALSO RETURN MASTER CONTROL INFO:
+            putExtra("MASTER_CONTROLLED", masterControlled)
+            putExtra("MASTER_TASK_ID", masterTaskId)
         }
 
         setResult(RESULT_OK, resultIntent)
@@ -352,7 +394,7 @@ class StroopDisplayActivity : AppCompatActivity() {
         val elapsedTime = viewModel.getCurrentElapsedTime()
         val remainingTime = viewModel.getCurrentRemainingTime()
 
-        val debugInfo = "Stimuli: $stimulusCount, Elapsed: ${elapsedTime}ms, Remaining: ${remainingTime}ms"
+        val debugInfo = "Stimuli: $stimulusCount, Elapsed: ${elapsedTime}ms, Remaining: ${remainingTime}ms, Master: $masterControlled"
 
         // Could show as toast or log
         android.util.Log.d("StroopDisplay", debugInfo)
@@ -364,6 +406,9 @@ class StroopDisplayActivity : AppCompatActivity() {
     private fun finishWithError(message: String) {
         val resultIntent = Intent().apply {
             putExtra("error_message", message)
+            // ✅ INCLUDE MASTER CONTROL INFO EVEN IN ERROR:
+            putExtra("MASTER_CONTROLLED", masterControlled)
+            putExtra("MASTER_TASK_ID", masterTaskId)
         }
         setResult(RESULT_CANCELED, resultIntent)
         finish()
@@ -381,13 +426,7 @@ class StroopDisplayActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Handle back button - emergency stop
-     */
-    override fun onBackPressed() {
-        // Emergency stop task
-        viewModel.emergencyStop()
-    }
+    // REMOVED: onBackPressed() method - now handled by OnBackPressedDispatcher in onCreate()
 
     /**
      * Handle display size changes (orientation, etc.)

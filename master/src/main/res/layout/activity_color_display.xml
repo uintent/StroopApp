@@ -317,7 +317,8 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
 
                 <Button
                     android:id="@+id/btn_task_success"
@@ -353,6 +354,21 @@
                     android:backgroundTint="@android:color/holo_orange_dark" />
 
             </LinearLayout>
+
+            <!-- NEW: Return to Tasks Button (initially hidden, shown on timeout/completion) -->
+            <Button
+                android:id="@+id/btn_return_to_tasks"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="⬅️ Return to Task Selection"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                android:backgroundTint="@android:color/holo_blue_dark"
+                android:textColor="@android:color/white"
+                android:paddingVertical="16dp"
+                style="@style/Widget.MaterialComponents.Button" />
 
         </LinearLayout>
 

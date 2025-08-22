@@ -25,6 +25,9 @@ import android.util.Log
  * Enhanced ViewModel for StroopDisplayActivity
  * Now integrates with Master commands for proper task control
  * Manages precise timing for countdown, Stroop stimuli display, and intervals
+ * ENHANCED: Added timeout detection and Master notification with comprehensive debug logging
+ * FIXED: Race condition in completeTask() method that prevented timeout messages from being sent
+ * FIXED: Added proper Master control initialization via initialize() method parameters
  */
 class StroopDisplayViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -92,41 +95,70 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * Handle incoming commands from Master
+     * ENHANCED: Added comprehensive debug logging to trace all message types
      */
     private fun handleMasterCommand(message: NetworkMessage) {
-        android.util.Log.d("StroopDisplay", "Received Master command: ${message.messageType}")
+        Log.d("StroopDisplay", "=== RECEIVED MASTER COMMAND ===")
+        Log.d("StroopDisplay", "Message type: ${message.messageType}")
+        Log.d("StroopDisplay", "Message class: ${message::class.java.simpleName}")
+        Log.d("StroopDisplay", "Full class name: ${message::class.java.name}")
+        Log.d("StroopDisplay", "Full message content: $message")
+        Log.d("StroopDisplay", "Current masterControlled: $masterControlled")
+        Log.d("StroopDisplay", "Current currentTaskId: $currentTaskId")
 
         viewModelScope.launch {
+            Log.d("StroopDisplay", "About to enter when statement for message matching...")
+            Log.d("StroopDisplay", "Checking message types:")
+            Log.d("StroopDisplay", "  - Is StartTaskMessage? ${message is StartTaskMessage}")
+            Log.d("StroopDisplay", "  - Is EndTaskMessage? ${message is EndTaskMessage}")
+            Log.d("StroopDisplay", "  - Is TaskResetCommand? ${message is TaskResetCommand}")
+
             when (message) {
                 is StartTaskMessage -> {
+                    Log.d("StroopDisplay", "🚀 MATCHED StartTaskMessage - calling handleStartTaskCommand")
                     handleStartTaskCommand(message)
                 }
 
                 is EndTaskMessage -> {
+                    Log.d("StroopDisplay", "🛑 MATCHED EndTaskMessage - calling handleEndTaskCommand")
                     handleEndTaskCommand(message)
                 }
 
                 is TaskResetCommand -> {
+                    Log.d("StroopDisplay", "🔄 MATCHED TaskResetCommand - calling handleResetTaskCommand")
                     handleResetTaskCommand(message)
                 }
 
                 else -> {
-                    android.util.Log.d("StroopDisplay", "Ignoring non-task command: ${message.messageType}")
+                    Log.w("StroopDisplay", "❓ UNMATCHED MESSAGE TYPE")
+                    Log.w("StroopDisplay", "Message class: ${message::class.java.name}")
+                    Log.w("StroopDisplay", "Available interfaces: ${message::class.java.interfaces.contentToString()}")
+                    Log.w("StroopDisplay", "Message superclass: ${message::class.java.superclass?.name}")
+                    Log.w("StroopDisplay", "Ignoring non-task command: ${message.messageType}")
                 }
             }
         }
+
+        Log.d("StroopDisplay", "=== MASTER COMMAND HANDLING COMPLETE ===")
     }
 
     /**
      * Handle START_TASK command from Master
-     * DEFENSIVE: Handle different message structures safely
+     * ENHANCED: Added comprehensive debug logging to trace masterControlled state
      */
     private suspend fun handleStartTaskCommand(message: StartTaskMessage) {
-        android.util.Log.d("StroopDisplay", "Starting task from Master: ${message.taskId}")
+        Log.d("StroopDisplay", "=== HANDLING START TASK COMMAND ===")
+        Log.d("StroopDisplay", "Starting task from Master: ${message.taskId}")
+        Log.d("StroopDisplay", "Current masterControlled before: $masterControlled")
+        Log.d("StroopDisplay", "Current currentTaskId before: $currentTaskId")
 
         try {
             currentTaskId = message.taskId
             masterControlled = true
+
+            Log.d("StroopDisplay", "✅ Set masterControlled = true")
+            Log.d("StroopDisplay", "✅ Set currentTaskId = ${message.taskId}")
+            Log.d("StroopDisplay", "Current masterControlled after setting: $masterControlled")
 
             // Extract configuration from message - handle different property names
             val stroopConfig = try {
@@ -135,7 +167,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                 field.isAccessible = true
                 field.get(message) as StroopSettings
             } catch (e: Exception) {
-                android.util.Log.e("StroopDisplay", "StartTaskMessage missing stroopSettings property", e)
+                Log.e("StroopDisplay", "StartTaskMessage missing stroopSettings property", e)
                 throw IllegalArgumentException("Master message missing required Stroop configuration")
             }
 
@@ -149,9 +181,12 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                     else -> throw IllegalArgumentException("Invalid timeout type")
                 }
             } catch (e: Exception) {
-                android.util.Log.e("StroopDisplay", "StartTaskMessage missing timeoutSeconds property", e)
+                Log.e("StroopDisplay", "StartTaskMessage missing timeoutSeconds property", e)
                 throw IllegalArgumentException("Master message missing required timeout")
             }
+
+            Log.d("StroopDisplay", "Extracted timeout: ${timeoutSeconds}s")
+            Log.d("StroopDisplay", "Extracted colors: ${stroopConfig.colors}")
 
             // Master MUST provide all configuration - no fallbacks
             val masterRuntimeConfig = createProjectorRuntimeConfigFromStroopSettings(stroopConfig)
@@ -167,19 +202,30 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                 timeoutDuration = timeoutSeconds.toLong() * 1000L
             ).start()
 
+            Log.d("StroopDisplay", "Created task execution with timeout: ${timeoutSeconds * 1000L}ms")
+
             // Create StroopGenerator with Master's configuration
             val stroopGen = StroopGenerator(masterRuntimeConfig)
 
             // Send confirmation to Master
             sendTaskStatusToMaster(message.taskId, TaskStatus.COUNTDOWN)
 
+            Log.d("StroopDisplay", "Final masterControlled state: $masterControlled")
+            Log.d("StroopDisplay", "Final currentTaskId state: $currentTaskId")
+
             // Start the display sequence with Master's configuration
             initialize(taskExecution, masterRuntimeConfig, stroopGen,
                 getCurrentDisplayWidth(), getCurrentDisplayHeight())
 
+            Log.d("StroopDisplay", "=== START TASK COMMAND COMPLETED SUCCESSFULLY ===")
+
         } catch (e: Exception) {
-            android.util.Log.e("StroopDisplay", "Error handling start task command - insufficient Master config", e)
+            Log.e("StroopDisplay", "❌ Error handling start task command - insufficient Master config", e)
             _errorEvent.postValue("Master configuration incomplete: ${e.message}")
+
+            // Reset state on error
+            masterControlled = false
+            currentTaskId = null
 
             // Send error to Master - configuration is Master's responsibility
             sendErrorToMaster("INVALID_MASTER_CONFIG", "Configuration from Master is incomplete: ${e.message}")
@@ -334,15 +380,6 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
             android.util.Log.d("StroopDisplay", "Creating TaskStatusMessage - sessionId: $sessionId, taskId: $taskId, status: $status, elapsedTime: $elapsedTime")
 
-            // Your exact definition:
-            // data class TaskStatusMessage(
-            //     override val sessionId: String,           // ✓
-            //     override val timestamp: Long = System.currentTimeMillis(), // ✓ has default
-            //     val taskId: String,                       // ✓
-            //     val status: TaskStatus,                   // ✓
-            //     val elapsedTimeMs: Long                   // ✓
-            // )
-
             // Use the imported TaskStatusMessage from shared.network.*
             val statusMessage = NetworkTaskStatusMessage(
                 sessionId = sessionId,
@@ -395,20 +432,88 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
     }
 
     /**
+     * ENHANCED: Send task timeout message to Master when task times out
+     * FIXED: Added comprehensive debugging and improved error handling
+     */
+    private suspend fun sendTaskTimeoutToMaster(taskExecution: TaskExecutionState) {
+        Log.d("StroopDisplay", "=== SENDING TASK TIMEOUT TO MASTER ===")
+        Log.d("StroopDisplay", "Network service: ${networkService != null}")
+        Log.d("StroopDisplay", "Network service class: ${networkService?.javaClass?.simpleName}")
+
+        try {
+            val sessionId = networkService?.getCurrentSessionId()
+            Log.d("StroopDisplay", "Session ID from service: $sessionId")
+
+            if (sessionId == null) {
+                Log.e("StroopDisplay", "❌ No session ID - cannot send timeout message")
+                return
+            }
+
+            val taskId = currentTaskId ?: "1"
+            Log.d("StroopDisplay", "Task ID: $taskId")
+            Log.d("StroopDisplay", "Elapsed time: ${taskExecution.getElapsedTime()}ms")
+            Log.d("StroopDisplay", "Stroop count: ${taskExecution.getStimulusCount()}")
+
+            val timeoutMessage = TaskTimeoutMessage(
+                sessionId = sessionId,
+                taskId = taskId,
+                actualDuration = taskExecution.getElapsedTime(),
+                stroopsDisplayed = taskExecution.getStimulusCount()
+            )
+
+            Log.d("StroopDisplay", "Created timeout message: $timeoutMessage")
+            Log.d("StroopDisplay", "About to send message...")
+
+            networkService?.sendMessage(timeoutMessage)
+
+            Log.d("StroopDisplay", "✅ Task timeout message sent successfully!")
+
+        } catch (e: Exception) {
+            Log.e("StroopDisplay", "❌ Error sending task timeout to Master", e)
+            Log.e("StroopDisplay", "Exception type: ${e.javaClass.simpleName}")
+            Log.e("StroopDisplay", "Exception message: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    /**
      * Initialize the display with task execution parameters
      * ENHANCED: Now supports both manual and Master-controlled initialization
+     * FIXED: Added Master control parameters
      */
     fun initialize(
         taskExecution: TaskExecutionState,
         runtimeConfig: ProjectorRuntimeConfig,
         stroopGenerator: StroopGenerator,
         displayWidth: Int,
-        displayHeight: Int
+        displayHeight: Int,
+        isMasterControlled: Boolean = false,  // ✅ ADD THIS PARAMETER
+        masterTaskId: String? = null          // ✅ ADD THIS PARAMETER
     ) {
+        android.util.Log.d("StroopDisplay", "=== INITIALIZE CALLED ===")
+        android.util.Log.d("StroopDisplay", "Master controlled param: $isMasterControlled")
+        android.util.Log.d("StroopDisplay", "Master task ID param: $masterTaskId")
+        android.util.Log.d("StroopDisplay", "Current masterControlled before: $masterControlled")
+
         this.runtimeConfig = runtimeConfig
         this.stroopGenerator = stroopGenerator
         this.stimulusSequenceNumber = 0
         this.isTaskRunning = true
+
+        // ✅ SET MASTER CONTROL STATE FROM PARAMETERS
+        if (isMasterControlled) {
+            this.masterControlled = true
+            this.currentTaskId = masterTaskId ?: taskExecution.taskId
+            android.util.Log.d("StroopDisplay", "✅ MASTER CONTROLLED TASK - masterControlled set to TRUE")
+            android.util.Log.d("StroopDisplay", "Master Task ID: ${this.currentTaskId}")
+        } else {
+            this.masterControlled = false
+            this.currentTaskId = null
+            android.util.Log.d("StroopDisplay", "Manual task - not Master controlled")
+        }
+
+        android.util.Log.d("StroopDisplay", "Final masterControlled state: $masterControlled")
+        android.util.Log.d("StroopDisplay", "Final currentTaskId state: $currentTaskId")
 
         _taskExecutionState.value = taskExecution
 
@@ -569,7 +674,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                     android.util.Log.d("Countdown", "🎯 Countdown complete - starting Stroop sequence")
                     startStroopSequence(taskExecution)
                 } else {
-                    android.util.Log.d("Countdown", "⏭️ Moving to next countdown step")
+                    android.util.Log.d("Countdown", "⭐ Moving to next countdown step")
 
                     // Calculate next countdown state
                     val nextCountdown = countdownState.getNext(stepDuration)
@@ -629,6 +734,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
     /**
      * Generate and display the next Stroop stimulus
      * ENHANCED: Now sends detailed information to Master
+     * FIXED: Properly handle Master-controlled vs timeout-initiated completion
      */
     private fun generateAndDisplayNextStimulus(taskExecution: TaskExecutionState) {
         android.util.Log.d("StroopDisplay", "=== generateAndDisplayNextStimulus called ===")
@@ -636,7 +742,10 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         // Check if task should continue
         if (taskExecution.hasTimedOut() || !taskExecution.isActive || !isTaskRunning) {
             android.util.Log.d("StroopDisplay", "Task should not continue - completing task")
-            completeTask(taskExecution)
+
+            // FIXED: If Master is controlling and task timed out, don't mark as masterInitiated
+            val isMasterInitiated = !taskExecution.hasTimedOut() && masterControlled
+            completeTask(taskExecution, masterInitiated = isMasterInitiated)
             return
         }
 
@@ -702,10 +811,6 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
             }
 
             val taskId = currentTaskId ?: "1" // Use fallback task ID if Master didn't set one
-            if (taskId == null) {
-                Log.e("StroopDisplay", "❌ No task ID - cannot send message")
-                return
-            }
 
             val hexColor = String.format("#%06X", (0xFFFFFF and timedStimulus.stimulus.displayColor))
 
@@ -811,10 +916,20 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
     }
 
     /**
-     * Complete the task and return to task execution
-     * ENHANCED: Now sends completion data to Master
+     * ENHANCED: Complete the task and return to task execution
+     * SIMPLIFIED: Projector can only timeout or be stopped by Master
      */
     private fun completeTask(taskExecution: TaskExecutionState, masterInitiated: Boolean = false) {
+        Log.d("StroopDisplay", "=== COMPLETING TASK ===")
+        Log.d("StroopDisplay", "Master controlled: $masterControlled")
+        Log.d("StroopDisplay", "Master initiated: $masterInitiated")
+
+        // ✅ SIMPLIFIED LOGIC: Check timeout BEFORE marking as complete
+        val wasTimedOut = taskExecution.hasTimedOut()
+        Log.d("StroopDisplay", "Task timed out: $wasTimedOut")
+        Log.d("StroopDisplay", "Elapsed time: ${taskExecution.getElapsedTime()}ms")
+        Log.d("StroopDisplay", "Timeout duration: ${taskExecution.timeoutDuration}ms")
+
         currentJob?.cancel()
         isTaskRunning = false
 
@@ -829,16 +944,36 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         _taskExecutionState.value = completedExecution
 
-        // Send completion data to Master
+        // ✅ SIMPLIFIED LOGIC: Only two scenarios for Projector
         if (masterControlled && !masterInitiated) {
-            sendTaskCompletionToMaster(completedExecution)
+            Log.d("StroopDisplay", "Master controlled task - sending notification")
+
+            viewModelScope.launch {
+                try {
+                    if (wasTimedOut) {
+                        Log.d("StroopDisplay", "⏰ Task timed out - notifying Master")
+                        sendTaskTimeoutToMaster(completedExecution)
+                    } else {
+                        Log.d("StroopDisplay", "❌ ERROR: Projector task completed without timeout or Master command")
+                        Log.d("StroopDisplay", "This should never happen - sending timeout anyway")
+                        sendTaskTimeoutToMaster(completedExecution)
+                    }
+                    Log.d("StroopDisplay", "✅ Master notification sent successfully")
+                } catch (e: Exception) {
+                    Log.e("StroopDisplay", "❌ Error sending notification to Master", e)
+                } finally {
+                    Log.d("StroopDisplay", "Resetting Master control state")
+                    masterControlled = false
+                    currentTaskId = null
+                }
+            }
+        } else {
+            Log.d("StroopDisplay", "Not sending notification - masterControlled=$masterControlled, masterInitiated=$masterInitiated")
+            masterControlled = false
+            currentTaskId = null
         }
 
         _taskCompletionEvent.value = TaskCompletionEvent(completedExecution)
-
-        // Reset Master control state
-        masterControlled = false
-        currentTaskId = null
     }
 
     /**

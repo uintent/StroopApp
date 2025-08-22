@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -25,6 +26,7 @@ import java.net.NetworkInterface
 /**
  * Main entry point activity for the Stroop Research app.
  * ENHANCED: Now handles Master command integration and activity launches
+ * FIXED: Properly passes Master control information to StroopDisplayActivity
  */
 class MainActivity : AppCompatActivity() {
 
@@ -50,6 +52,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         android.util.Log.d("StroopApp", "ViewBinding set up, setting up observers")
+
+        // ✅ MODERN BACK BUTTON HANDLING
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                showExitConfirmation()
+            }
+        })
 
         // Show initial network info
         showInitialNetworkInfo()
@@ -111,6 +120,7 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Handle START_TASK command from Master by launching StroopDisplayActivity
+     * ENHANCED: Now properly passes Master control information to the activity
      */
     private fun handleStartTaskCommand(message: StartTaskMessage) {
         if (isTaskRunning) {
@@ -119,37 +129,54 @@ class MainActivity : AppCompatActivity() {
         }
 
         try {
-            android.util.Log.d("ProjectorApp", "Handling StartTaskMessage: ${message.taskId}")
+            android.util.Log.d("ProjectorApp", "=== HANDLING START TASK COMMAND ===")
+            android.util.Log.d("ProjectorApp", "Task ID: ${message.taskId}")
+            android.util.Log.d("ProjectorApp", "Timeout: ${message.timeoutSeconds}s")
+            android.util.Log.d("ProjectorApp", "Colors: ${message.stroopSettings.colors}")
 
             // Convert Master's configuration to local format
             val runtimeConfig = convertStroopSettingsToRuntimeConfig(message.stroopSettings)
+            android.util.Log.d("ProjectorApp", "✅ Runtime config created successfully")
 
             // Create task execution state
             val taskExecution = TaskExecutionState(
                 taskId = message.taskId,
                 timeoutDuration = message.timeoutSeconds.toLong() * 1000L
             ).start()
+            android.util.Log.d("ProjectorApp", "✅ Task execution state created: ${taskExecution.taskId}")
 
             // Create Stroop generator
             val stroopGenerator = StroopGenerator(runtimeConfig)
+            android.util.Log.d("ProjectorApp", "✅ Stroop generator created")
 
             // Update state
             isTaskRunning = true
             currentTaskId = message.taskId
+            android.util.Log.d("ProjectorApp", "✅ Task state updated - isTaskRunning: $isTaskRunning")
 
-            // Launch StroopDisplayActivity with required data
+            // ✅ Launch StroopDisplayActivity with Master control information
             val intent = Intent(this, StroopDisplayActivity::class.java).apply {
                 putExtra(TaskExecutionActivity.EXTRA_TASK_EXECUTION, taskExecution)
                 putExtra(TaskExecutionActivity.EXTRA_RUNTIME_CONFIG, runtimeConfig)
                 putExtra(TaskExecutionActivity.EXTRA_STROOP_GENERATOR, stroopGenerator)
+
+                // ✅ CRITICAL: Add Master control information
+                putExtra("MASTER_CONTROLLED", true)
+                putExtra("MASTER_TASK_ID", message.taskId)
+                putExtra("MASTER_TIMEOUT_SECONDS", message.timeoutSeconds)
+
+                android.util.Log.d("ProjectorApp", "✅ Intent created with Master control extras:")
+                android.util.Log.d("ProjectorApp", "  - MASTER_CONTROLLED: true")
+                android.util.Log.d("ProjectorApp", "  - MASTER_TASK_ID: ${message.taskId}")
+                android.util.Log.d("ProjectorApp", "  - MASTER_TIMEOUT_SECONDS: ${message.timeoutSeconds}")
             }
 
             startActivityForResult(intent, REQUEST_CODE_STROOP_DISPLAY)
 
-            android.util.Log.d("ProjectorApp", "Launched StroopDisplayActivity for task: ${message.taskId}")
+            android.util.Log.d("ProjectorApp", "✅ StroopDisplayActivity launched successfully for task: ${message.taskId}")
 
         } catch (e: Exception) {
-            android.util.Log.e("ProjectorApp", "Failed to handle start task command", e)
+            android.util.Log.e("ProjectorApp", "❌ Failed to handle start task command", e)
 
             // Send error back to Master
             lifecycleScope.launch {
@@ -162,8 +189,15 @@ class MainActivity : AppCompatActivity() {
                         isFatal = false
                     )
                     networkService.sendMessage(errorMessage)
+                    android.util.Log.d("ProjectorApp", "✅ Error message sent to Master")
+                } else {
+                    android.util.Log.e("ProjectorApp", "❌ No session ID - cannot send error to Master")
                 }
             }
+
+            // Reset state on error
+            isTaskRunning = false
+            currentTaskId = null
         }
     }
 
@@ -171,12 +205,17 @@ class MainActivity : AppCompatActivity() {
      * Handle END_TASK command from Master
      */
     private fun handleEndTaskCommand(message: EndTaskMessage) {
-        android.util.Log.d("ProjectorApp", "Handling EndTaskMessage: ${message.taskId}")
+        android.util.Log.d("ProjectorApp", "=== HANDLING END TASK COMMAND ===")
+        android.util.Log.d("ProjectorApp", "Task ID: ${message.taskId}")
+        android.util.Log.d("ProjectorApp", "Current task ID: $currentTaskId")
+        android.util.Log.d("ProjectorApp", "Is task running: $isTaskRunning")
 
         if (message.taskId == currentTaskId && isTaskRunning) {
             // Task should be ended - the StroopDisplayActivity should handle this
             // through its own ViewModel listening to the same message stream
-            android.util.Log.d("ProjectorApp", "Task end command acknowledged")
+            android.util.Log.d("ProjectorApp", "✅ Task end command acknowledged - StroopDisplayViewModel will handle it")
+        } else {
+            android.util.Log.w("ProjectorApp", "❌ End task command ignored - task ID mismatch or not running")
         }
     }
 
@@ -184,11 +223,13 @@ class MainActivity : AppCompatActivity() {
      * Handle RESET_TASK command from Master
      */
     private fun handleResetTaskCommand(message: TaskResetCommand) {
-        android.util.Log.d("ProjectorApp", "Handling TaskResetCommand")
+        android.util.Log.d("ProjectorApp", "=== HANDLING RESET TASK COMMAND ===")
 
         // Reset task state
         isTaskRunning = false
         currentTaskId = null
+
+        android.util.Log.d("ProjectorApp", "✅ Task state reset - isTaskRunning: false, currentTaskId: null")
 
         // If StroopDisplayActivity is running, it should handle the reset
         // and return to this activity
@@ -196,9 +237,14 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Convert Master's StroopSettings to local RuntimeConfig format
+     * ENHANCED: Added better error handling and validation
      */
     private fun convertStroopSettingsToRuntimeConfig(stroopSettings: StroopSettings): RuntimeConfig {
-        android.util.Log.d("ProjectorApp", "Converting StroopSettings: ${stroopSettings.colors.size} colors")
+        android.util.Log.d("ProjectorApp", "=== CONVERTING STROOP SETTINGS ===")
+        android.util.Log.d("ProjectorApp", "Colors: ${stroopSettings.colors.size}")
+        android.util.Log.d("ProjectorApp", "Display duration: ${stroopSettings.displayDurationMs}ms")
+        android.util.Log.d("ProjectorApp", "Interval: ${stroopSettings.minIntervalMs}-${stroopSettings.maxIntervalMs}ms")
+        android.util.Log.d("ProjectorApp", "Countdown: ${stroopSettings.countdownDurationMs}ms")
 
         // Validate input
         if (stroopSettings.colors.size < 2) {
@@ -217,10 +263,24 @@ class MainActivity : AppCompatActivity() {
                 "orange" -> "#FF8000"
                 "lila", "purple" -> "#800080"
                 else -> {
-                    android.util.Log.w("ProjectorApp", "Unknown color from Master: $colorName")
+                    android.util.Log.w("ProjectorApp", "⚠️ Unknown color from Master: $colorName")
                     "#808080" // Gray for unknown colors
                 }
             }
+        }
+
+        android.util.Log.d("ProjectorApp", "✅ Color mappings created: ${stroopColors.size} colors")
+
+        // Validate timing values
+        if (stroopSettings.displayDurationMs <= 0 ||
+            stroopSettings.minIntervalMs <= 0 ||
+            stroopSettings.maxIntervalMs <= 0 ||
+            stroopSettings.countdownDurationMs <= 0) {
+            throw IllegalArgumentException("Invalid timing values from Master")
+        }
+
+        if (stroopSettings.minIntervalMs > stroopSettings.maxIntervalMs) {
+            throw IllegalArgumentException("Invalid interval range from Master")
         }
 
         // Create base configuration
@@ -236,18 +296,30 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        return RuntimeConfig(baseConfig = baseConfig)
+        val runtimeConfig = RuntimeConfig(baseConfig = baseConfig)
+        android.util.Log.d("ProjectorApp", "✅ Runtime config created successfully")
+
+        return runtimeConfig
     }
 
     /**
      * Handle result from StroopDisplayActivity
+     * ENHANCED: Now handles Master control information from the returned result
      */
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         when (requestCode) {
             REQUEST_CODE_STROOP_DISPLAY -> {
-                android.util.Log.d("ProjectorApp", "StroopDisplayActivity result: $resultCode")
+                android.util.Log.d("ProjectorApp", "=== STROOP DISPLAY ACTIVITY RESULT ===")
+                android.util.Log.d("ProjectorApp", "Result code: $resultCode")
+
+                // ✅ Extract Master control information from result
+                val wasMasterControlled = data?.getBooleanExtra("MASTER_CONTROLLED", false) ?: false
+                val masterTaskId = data?.getStringExtra("MASTER_TASK_ID")
+
+                android.util.Log.d("ProjectorApp", "Was Master controlled: $wasMasterControlled")
+                android.util.Log.d("ProjectorApp", "Master task ID: $masterTaskId")
 
                 // Reset task state
                 isTaskRunning = false
@@ -260,19 +332,23 @@ class MainActivity : AppCompatActivity() {
                             TaskExecutionActivity.EXTRA_COMPLETED_TASK_EXECUTION
                         ) as? TaskExecutionState
 
-                        android.util.Log.d("ProjectorApp", "Task completed: ${completedExecution?.taskId}")
+                        android.util.Log.d("ProjectorApp", "✅ Task completed successfully: ${completedExecution?.taskId}")
+                        android.util.Log.d("ProjectorApp", "Execution details:")
+                        android.util.Log.d("ProjectorApp", "  - Duration: ${completedExecution?.getElapsedTime()}ms")
+                        android.util.Log.d("ProjectorApp", "  - Stimuli: ${completedExecution?.getStimulusCount()}")
+                        android.util.Log.d("ProjectorApp", "  - Timed out: ${completedExecution?.hasTimedOut()}")
 
-                        // Send completion notification to Master if needed
-                        // (This might already be handled by StroopDisplayViewModel)
+                        // Note: Timeout/completion notifications to Master should already be
+                        // handled by StroopDisplayViewModel, so we don't need to send them here
                     }
 
                     RESULT_CANCELED -> {
                         // Task was cancelled or error occurred
                         val errorMessage = data?.getStringExtra("error_message")
-                        android.util.Log.w("ProjectorApp", "Task cancelled: $errorMessage")
+                        android.util.Log.w("ProjectorApp", "❌ Task cancelled or error: $errorMessage")
 
-                        // Send error to Master if needed
-                        if (errorMessage != null) {
+                        // Send error to Master if it was a Master-controlled task
+                        if (wasMasterControlled && errorMessage != null) {
                             lifecycleScope.launch {
                                 val sessionId = networkService.getCurrentSessionId()
                                 if (sessionId != null) {
@@ -283,11 +359,16 @@ class MainActivity : AppCompatActivity() {
                                         isFatal = false
                                     )
                                     networkService.sendMessage(error)
+                                    android.util.Log.d("ProjectorApp", "✅ Error message sent to Master")
+                                } else {
+                                    android.util.Log.e("ProjectorApp", "❌ No session ID - cannot send error to Master")
                                 }
                             }
                         }
                     }
                 }
+
+                android.util.Log.d("ProjectorApp", "=== ACTIVITY RESULT HANDLED ===")
             }
         }
     }
@@ -498,15 +579,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * Handle back button press
-     */
-    @Suppress("DEPRECATION")
-    override fun onBackPressed() {
-        // On main activity, back button should show exit confirmation
-        // NOT calling super.onBackPressed() because we want to show dialog first
-        showExitConfirmation()
-    }
+    // REMOVED: onBackPressed() method - now handled by OnBackPressedDispatcher in onCreate()
 
     /**
      * Handle activity lifecycle - refresh config state when returning
