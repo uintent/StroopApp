@@ -17,6 +17,7 @@ import com.research.shared.network.HandshakeResponseMessage
 import com.research.shared.network.StroopStartedMessage
 import com.research.shared.network.StroopEndedMessage
 import com.research.shared.network.TaskTimeoutMessage
+import com.research.shared.network.MessageType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -27,6 +28,7 @@ import androidx.core.content.ContextCompat
  * Task Control Screen - displays task information and provides controls for task execution
  * Shows current Stroop word from Projector and allows moderator to control task flow
  * ENHANCED: Added timeout handling with proper UI state management and TaskControlManager sync
+ * FIXED: Enhanced message matching with multiple fallback approaches for TaskTimeoutMessage
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
@@ -57,6 +59,9 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Initialize task control manager
         taskControlManager = TaskControlNetworkManager(networkClient)
 
+        // 🎯 QUICK FIX: Debug imports immediately
+        debugImports()
+
         // Get task information from intent
         extractTaskInfo()
 
@@ -86,6 +91,28 @@ class ColorDisplayActivity : AppCompatActivity() {
 
         // Set initial state
         showTaskReady()
+    }
+
+    // 🎯 QUICK FIX: Debug import availability
+    private fun debugImports() {
+        Log.d("TaskControl", "=== IMPORT DEBUG ===")
+        try {
+            val timeoutClass = TaskTimeoutMessage::class.java
+            Log.d("TaskControl", "✅ TaskTimeoutMessage class: ${timeoutClass.name}")
+            Log.d("TaskControl", "✅ Package: ${timeoutClass.packageName}")
+            Log.d("TaskControl", "✅ Constructors: ${timeoutClass.constructors.size}")
+
+            // Check MessageType enum
+            try {
+                val messageTypeClass = MessageType::class.java
+                Log.d("TaskControl", "✅ MessageType enum: ${messageTypeClass.name}")
+                Log.d("TaskControl", "✅ TASK_TIMEOUT exists: ${MessageType.TASK_TIMEOUT}")
+            } catch (e: Exception) {
+                Log.e("TaskControl", "❌ MessageType enum problem!", e)
+            }
+        } catch (e: Exception) {
+            Log.e("TaskControl", "❌ TaskTimeoutMessage import problem!", e)
+        }
     }
 
     private fun extractTaskInfo() {
@@ -243,7 +270,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * Enhanced message observation with comprehensive timeout debugging
+     * Enhanced message observation with comprehensive timeout debugging and multiple fallback approaches
      */
     private fun observeNetworkMessages() {
         Log.d("TaskControl", "=== SETTING UP MESSAGE LISTENER ===")
@@ -261,7 +288,7 @@ class ColorDisplayActivity : AppCompatActivity() {
                     Log.d("TaskControl", "Message content: $message")
                     Log.d("TaskControl", "Activity lifecycle state: ${lifecycle.currentState}")
 
-                    // ENHANCED: Add explicit TaskTimeoutMessage type checking
+                    // 🎯 ENHANCED: Add explicit TaskTimeoutMessage type checking
                     Log.d("TaskControl", "Is TaskTimeoutMessage? ${message is TaskTimeoutMessage}")
                     if (message is TaskTimeoutMessage) {
                         Log.d("TaskControl", "✅ CONFIRMED: This is a TaskTimeoutMessage!")
@@ -270,71 +297,107 @@ class ColorDisplayActivity : AppCompatActivity() {
                         Log.d("TaskControl", "Stroops: ${message.stroopsDisplayed}")
                     }
 
-                    // CRITICAL: Log this before when statement
-                    Log.d("TaskControl", "About to enter when statement...")
+                    // Check if TaskTimeoutMessage class is available
+                    try {
+                        val timeoutClass = TaskTimeoutMessage::class.java
+                        Log.d("TaskControl", "TaskTimeoutMessage class available: ${timeoutClass.name}")
+                        Log.d("TaskControl", "Message class matches? ${message::class.java == timeoutClass}")
+                    } catch (e: Exception) {
+                        Log.e("TaskControl", "TaskTimeoutMessage class not available!", e)
+                    }
 
                     // Only process messages if activity is resumed
                     if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
                         Log.d("TaskControl", "Processing message (activity resumed)")
 
+                        // 🎯 ENHANCED: Multiple fallback approaches for message matching
                         when (message) {
-                            // ENHANCED: Handle task timeout message with detailed logging
+                            // 🎯 PRIMARY: Try direct type matching first
                             is TaskTimeoutMessage -> {
-                                Log.d("TaskControl", "🎯 MATCHED TaskTimeoutMessage!")
-                                Log.d("TaskControl", "TaskID: ${message.taskId}")
-                                Log.d("TaskControl", "Duration: ${message.actualDuration}ms")
-                                Log.d("TaskControl", "Stroops: ${message.stroopsDisplayed}")
-                                Log.d("TaskControl", "Current task ID: $taskId")
-                                Log.d("TaskControl", "Task IDs match: ${message.taskId == taskId}")
-
+                                Log.d("TaskControl", "🎯 MATCHED TaskTimeoutMessage via direct 'is' check!")
                                 handleTaskTimeout(message)
-                                Log.d("TaskControl", "✅ TaskTimeout handler completed")
-                            }
-
-                            // Enhanced Stroop messages from updated Projector
-                            is StroopStartedMessage -> {
-                                Log.d("TaskControl", "MATCHED StroopStartedMessage")
-                                Log.d("TaskControl", "Stroop started: index=${message.stroopIndex}, word='${message.word}', correctAnswer='${message.correctAnswer}'")
-                                handleStroopStarted(message)
-                            }
-
-                            is StroopEndedMessage -> {
-                                Log.d("TaskControl", "MATCHED StroopEndedMessage")
-                                Log.d("TaskControl", "Stroop ended: index=${message.stroopIndex}, reason=${message.endReason}")
-                                handleStroopEnded(message)
-                            }
-
-                            // LEGACY: Keep old message handlers for compatibility
-                            is StroopDisplayMessage -> {
-                                Log.d("TaskControl", "MATCHED StroopDisplayMessage (legacy)")
-                                handleStroopDisplay(message)
-                            }
-
-                            is StroopHiddenMessage -> {
-                                Log.d("TaskControl", "MATCHED StroopHiddenMessage (legacy)")
-                                handleStroopHidden()
-                            }
-
-                            // Connection management messages
-                            is HeartbeatMessage -> {
-                                Log.v("TaskControl", "Heartbeat received - connection alive")
-                                // Ignore heartbeats - they're just for connection monitoring
-                            }
-
-                            is HandshakeResponseMessage -> {
-                                Log.d("TaskControl", "Handshake response received")
-                                // Ignore handshake responses - they're handled by the connection logic
                             }
 
                             else -> {
-                                Log.w("TaskControl", "❓ UNMATCHED MESSAGE TYPE")
-                                Log.w("TaskControl", "Message class: ${message::class.java.name}")
-                                Log.w("TaskControl", "Available interfaces: ${message::class.java.interfaces.contentToString()}")
-                                Log.w("TaskControl", "Message string: $message")
+                                // 🎯 FALLBACK 1: Check by message type enum
+                                if (message.messageType == MessageType.TASK_TIMEOUT) {
+                                    Log.d("TaskControl", "🎯 MATCHED by MessageType.TASK_TIMEOUT!")
+                                    try {
+                                        val timeoutMessage = message as TaskTimeoutMessage
+                                        handleTaskTimeout(timeoutMessage)
+                                    } catch (e: ClassCastException) {
+                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage", e)
+                                    }
+                                }
+                                // 🎯 FALLBACK 2: Check by class name string
+                                else if (message::class.java.simpleName == "TaskTimeoutMessage") {
+                                    Log.d("TaskControl", "🎯 MATCHED by class name!")
+                                    try {
+                                        val timeoutMessage = message as TaskTimeoutMessage
+                                        handleTaskTimeout(timeoutMessage)
+                                    } catch (e: ClassCastException) {
+                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage by class name", e)
+                                    }
+                                }
+                                // 🎯 FALLBACK 3: Check by full class name
+                                else if (message::class.java.name.contains("TaskTimeoutMessage")) {
+                                    Log.d("TaskControl", "🎯 MATCHED by full class name!")
+                                    try {
+                                        val timeoutMessage = message as TaskTimeoutMessage
+                                        handleTaskTimeout(timeoutMessage)
+                                    } catch (e: ClassCastException) {
+                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage by full class name", e)
+                                    }
+                                }
+                                // Handle other message types
+                                else {
+                                    when (message) {
+                                        // Enhanced Stroop messages from updated Projector
+                                        is StroopStartedMessage -> {
+                                            Log.d("TaskControl", "MATCHED StroopStartedMessage")
+                                            handleStroopStarted(message)
+                                        }
 
-                                // Still forward to TaskControlManager for other message types
-                                Log.d("TaskControl", "Forwarding to TaskControlManager...")
-                                taskControlManager.handleTaskMessage(message)
+                                        is StroopEndedMessage -> {
+                                            Log.d("TaskControl", "MATCHED StroopEndedMessage")
+                                            handleStroopEnded(message)
+                                        }
+
+                                        // LEGACY: Keep old message handlers for compatibility
+                                        is StroopDisplayMessage -> {
+                                            Log.d("TaskControl", "MATCHED StroopDisplayMessage (legacy)")
+                                            handleStroopDisplay(message)
+                                        }
+
+                                        is StroopHiddenMessage -> {
+                                            Log.d("TaskControl", "MATCHED StroopHiddenMessage (legacy)")
+                                            handleStroopHidden()
+                                        }
+
+                                        // Connection management messages
+                                        is HeartbeatMessage -> {
+                                            Log.v("TaskControl", "Heartbeat received - connection alive")
+                                            // Ignore heartbeats - they're just for connection monitoring
+                                        }
+
+                                        is HandshakeResponseMessage -> {
+                                            Log.d("TaskControl", "Handshake response received")
+                                            // Ignore handshake responses - they're handled by the connection logic
+                                        }
+
+                                        else -> {
+                                            Log.w("TaskControl", "❌ UNMATCHED MESSAGE TYPE")
+                                            Log.w("TaskControl", "Message class: ${message::class.java.name}")
+                                            Log.w("TaskControl", "Available interfaces: ${message::class.java.interfaces.contentToString()}")
+                                            Log.w("TaskControl", "Message string: $message")
+                                            Log.w("TaskControl", "Message superclass: ${message::class.java.superclass?.name}")
+
+                                            // Still forward to TaskControlManager for other message types
+                                            Log.d("TaskControl", "Forwarding to TaskControlManager...")
+                                            taskControlManager.handleTaskMessage(message)
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {
