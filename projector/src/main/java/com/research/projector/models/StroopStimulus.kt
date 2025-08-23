@@ -177,7 +177,8 @@ enum class StimulusDisplayState {
     COUNTDOWN,      // Showing countdown (3, 2, 1, 0)
     DISPLAY,        // Showing Stroop stimulus
     INTERVAL,       // White screen between stimuli
-    COMPLETED       // Task finished
+    COMPLETED,       // Task finished
+    PAUSED          // Task paused
 }
 
 /**

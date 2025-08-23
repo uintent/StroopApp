@@ -17,7 +17,7 @@ import com.research.projector.viewmodels.*
 /**
  * Activity for fullscreen Stroop stimulus display with precise timing.
  * Handles countdown, stimulus presentation, and intervals with research-grade accuracy.
- * ENHANCED: Now supports Master-controlled task execution
+ * ENHANCED: Now supports Master-controlled task execution with pause/resume functionality
  */
 class StroopDisplayActivity : AppCompatActivity() {
 
@@ -37,7 +37,7 @@ class StroopDisplayActivity : AppCompatActivity() {
     private var runtimeConfig: RuntimeConfig? = null
     private var stroopGenerator: StroopGenerator? = null
 
-    // ✅ ADD THESE PROPERTIES FOR MASTER CONTROL:
+    // ✅ Master control properties
     private var masterControlled: Boolean = false
     private var masterTaskId: String? = null
     private var masterTimeoutSeconds: Int = 0
@@ -201,6 +201,7 @@ class StroopDisplayActivity : AppCompatActivity() {
 
     /**
      * Handle display state changes
+     * ENHANCED: Now includes PAUSED state handling
      */
     private fun handleDisplayState(state: StimulusDisplayState) {
         when (state) {
@@ -220,6 +221,10 @@ class StroopDisplayActivity : AppCompatActivity() {
                 showIntervalState()
             }
 
+            StimulusDisplayState.PAUSED -> {
+                showPausedState()
+            }
+
             StimulusDisplayState.COMPLETED -> {
                 showCompletedState()
             }
@@ -231,6 +236,7 @@ class StroopDisplayActivity : AppCompatActivity() {
 
     /**
      * Handle display content changes
+     * ENHANCED: Now includes PausedScreen handling
      */
     private fun handleDisplayContent(content: DisplayContent) {
         when (content) {
@@ -244,6 +250,10 @@ class StroopDisplayActivity : AppCompatActivity() {
 
             is DisplayContent.Interval -> {
                 showIntervalScreen()
+            }
+
+            is DisplayContent.PausedScreen -> {
+                showPausedScreen()
             }
 
             is DisplayContent.BlackScreen -> {
@@ -283,6 +293,17 @@ class StroopDisplayActivity : AppCompatActivity() {
     }
 
     /**
+     * Show paused state
+     * NEW: Handle task pause display
+     */
+    private fun showPausedState() {
+        binding.tvCountdown.isVisible = false
+        binding.tvStroopStimulus.isVisible = true  // Use Stroop display for pause message
+        binding.viewInterval.isVisible = false
+        binding.viewBlackScreen.isVisible = false
+    }
+
+    /**
      * Show completed state
      */
     private fun showCompletedState() {
@@ -317,6 +338,18 @@ class StroopDisplayActivity : AppCompatActivity() {
     }
 
     /**
+     * Show paused screen content
+     * NEW: Display pause message to participant
+     */
+    private fun showPausedScreen() {
+        binding.tvStroopStimulus.apply {
+            text = "PAUSED"
+            setTextColor(getColor(android.R.color.white))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 48f)
+        }
+    }
+
+    /**
      * Show black screen
      */
     private fun showBlackScreen() {
@@ -336,6 +369,7 @@ class StroopDisplayActivity : AppCompatActivity() {
 
     /**
      * Update status indicator for debugging
+     * ENHANCED: Added PAUSED state color
      */
     private fun updateStatusIndicator(state: StimulusDisplayState) {
         val color = when (state) {
@@ -343,6 +377,7 @@ class StroopDisplayActivity : AppCompatActivity() {
             StimulusDisplayState.COUNTDOWN -> getColor(R.color.status_active)
             StimulusDisplayState.DISPLAY -> getColor(R.color.status_active)
             StimulusDisplayState.INTERVAL -> getColor(R.color.status_ready)
+            StimulusDisplayState.PAUSED -> getColor(android.R.color.holo_orange_light)  // Orange for paused
             StimulusDisplayState.COMPLETED -> getColor(R.color.status_complete)
         }
 
@@ -425,8 +460,6 @@ class StroopDisplayActivity : AppCompatActivity() {
             configureFullscreenDisplay()
         }
     }
-
-    // REMOVED: onBackPressed() method - now handled by OnBackPressedDispatcher in onCreate()
 
     /**
      * Handle display size changes (orientation, etc.)

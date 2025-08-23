@@ -14,7 +14,10 @@
     <!-- File access permissions (for data export) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- READ_EXTERNAL_STORAGE deprecated on Android 13+ (API 33+) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- New granular media permissions for Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -39,10 +42,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Participant Information Activity -->
+        <!-- NEW: Main Session Activity (Central Hub) -->
         <activity
-            android:name=".ParticipantInfoActivity"
-            android:label="Participant Information"
+            android:name=".MainSessionActivity"
+            android:label="Session Manager"
             android:parentActivityName=".DeviceDiscoveryActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.StroopApp.NoActionBar"
@@ -50,6 +53,19 @@
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".DeviceDiscoveryActivity" />
+        </activity>
+
+        <!-- Participant Information Activity -->
+        <activity
+            android:name=".ParticipantInfoActivity"
+            android:label="Participant Information"
+            android:parentActivityName=".MainSessionActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StroopApp.NoActionBar"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainSessionActivity" />
         </activity>
 
         <!-- Task Selection Activity -->

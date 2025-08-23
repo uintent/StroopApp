@@ -12,6 +12,7 @@ import com.research.projector.utils.FontSizingResult
 import com.research.projector.utils.StroopGenerator
 import com.research.projector.network.ProjectorNetworkManager
 import com.research.projector.network.ProjectorNetworkService
+import com.research.projector.MainActivity
 import com.research.shared.network.*
 // Import the correct TaskStatusMessage from NetworkMessage.kt (not TaskControlMessages.kt)
 import com.research.shared.network.TaskStatusMessage as NetworkTaskStatusMessage
@@ -23,11 +24,10 @@ import android.util.Log
 
 /**
  * Enhanced ViewModel for StroopDisplayActivity
- * Now integrates with Master commands for proper task control
- * Manages precise timing for countdown, Stroop stimuli display, and intervals
+ * UPDATED: Now receives Master commands via MainActivity message forwarding
+ * SIMPLIFIED: No longer directly listens to network messages - uses forwarding pattern
  * ENHANCED: Added timeout detection and Master notification with comprehensive debug logging
  * FIXED: Race condition in completeTask() method that prevented timeout messages from being sent
- * FIXED: Added proper Master control initialization via initialize() method parameters
  */
 class StroopDisplayViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -63,87 +63,132 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
     private var currentJob: Job? = null
     private var stimulusSequenceNumber = 0
 
-    // NEW: Network and task control state
+    // Network and task control state
     private var networkService: ProjectorNetworkService? = null
     private var currentTaskId: String? = null
     private var isTaskRunning = false
     private var masterControlled = false  // Whether task is controlled by Master
 
     init {
-        // Initialize network service and listen for Master commands
+        Log.d("StroopDisplay", "🚀 StroopDisplayViewModel CREATED - instance: ${this.hashCode()}")
+        // Initialize network service (without message listening)
         initializeNetworkService()
+        // Register with MainActivity for message forwarding
+        registerWithMainActivity()
     }
 
     /**
-     * Initialize network service and set up Master command listening
+     * ✅ NEW: Register this ViewModel with MainActivity for message forwarding
      */
-    private fun initializeNetworkService() {
+    private fun registerWithMainActivity() {
         try {
-            networkService = ProjectorNetworkManager.getNetworkService(getApplication())
-
-            // Listen for incoming Master commands
-            viewModelScope.launch {
-                networkService?.receiveMessages()?.collectLatest { message ->
-                    handleMasterCommand(message)
-                }
+            val mainActivity = MainActivity.getInstance()
+            if (mainActivity != null) {
+                mainActivity.registerStroopViewModel(this)
+                Log.d("StroopDisplay", "✅ Successfully registered with MainActivity")
+            } else {
+                Log.w("StroopDisplay", "⚠️ MainActivity instance not available for registration")
             }
         } catch (e: Exception) {
-            android.util.Log.e("StroopDisplay", "Failed to initialize network service", e)
+            Log.e("StroopDisplay", "❌ Failed to register with MainActivity", e)
+        }
+    }
+
+    /**
+     * Initialize network service (NO MESSAGE LISTENING - messages come via MainActivity)
+     * SIMPLIFIED: Only gets network service reference, doesn't listen to messages
+     */
+    private fun initializeNetworkService() {
+        Log.d("StroopDisplay", "=== INITIALIZING NETWORK SERVICE (NO MESSAGE LISTENING) ===")
+        Log.d("StroopDisplay", "Thread: ${Thread.currentThread().name}")
+        Log.d("StroopDisplay", "ViewModel instance: ${this.hashCode()}")
+
+        try {
+            networkService = ProjectorNetworkManager.getNetworkService(getApplication())
+            Log.d("StroopDisplay", "✅ Network service obtained: ${networkService != null}")
+            Log.d("StroopDisplay", "Network service instance: ${networkService?.hashCode()}")
+            Log.d("StroopDisplay", "Network service class: ${networkService?.javaClass?.simpleName}")
+
+            // Check if service is connected
+            val isConnected = networkService?.isConnected() ?: false
+            Log.d("StroopDisplay", "Service connected: $isConnected")
+
+            // Get session ID for verification
+            val sessionId = networkService?.getCurrentSessionId()
+            Log.d("StroopDisplay", "Current session ID: $sessionId")
+
+            // ❌ REMOVED: No longer listen to messages directly
+            // Messages will be forwarded from MainActivity via handleXXXFromMaster() methods
+
+            Log.d("StroopDisplay", "✅ Network service initialized (message forwarding mode)")
+
+        } catch (e: Exception) {
+            Log.e("StroopDisplay", "❌ Failed to initialize network service", e)
+            Log.e("StroopDisplay", "Exception type: ${e.javaClass.simpleName}")
+            Log.e("StroopDisplay", "Exception message: ${e.message}")
+            e.printStackTrace()
             _errorEvent.value = "Network initialization failed: ${e.message}"
         }
+
+        Log.d("StroopDisplay", "=== NETWORK SERVICE INITIALIZATION COMPLETE ===")
     }
 
+    // ✅ NEW: Public methods for MainActivity to forward Master commands
+
     /**
-     * Handle incoming commands from Master
-     * ENHANCED: Added comprehensive debug logging to trace all message types
+     * Handle END_TASK command forwarded from MainActivity
      */
-    private fun handleMasterCommand(message: NetworkMessage) {
-        Log.d("StroopDisplay", "=== RECEIVED MASTER COMMAND ===")
-        Log.d("StroopDisplay", "Message type: ${message.messageType}")
-        Log.d("StroopDisplay", "Message class: ${message::class.java.simpleName}")
-        Log.d("StroopDisplay", "Full class name: ${message::class.java.name}")
-        Log.d("StroopDisplay", "Full message content: $message")
-        Log.d("StroopDisplay", "Current masterControlled: $masterControlled")
-        Log.d("StroopDisplay", "Current currentTaskId: $currentTaskId")
+    fun handleEndTaskFromMaster(message: EndTaskMessage) {
+        Log.d("StroopDisplay", "🛑 === RECEIVED END TASK FROM MAINACTIVITY ===")
+        Log.d("StroopDisplay", "Task ID: ${message.taskId}")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+        Log.d("StroopDisplay", "Is task running: $isTaskRunning")
 
         viewModelScope.launch {
-            Log.d("StroopDisplay", "About to enter when statement for message matching...")
-            Log.d("StroopDisplay", "Checking message types:")
-            Log.d("StroopDisplay", "  - Is StartTaskMessage? ${message is StartTaskMessage}")
-            Log.d("StroopDisplay", "  - Is EndTaskMessage? ${message is EndTaskMessage}")
-            Log.d("StroopDisplay", "  - Is TaskResetCommand? ${message is TaskResetCommand}")
-
-            when (message) {
-                is StartTaskMessage -> {
-                    Log.d("StroopDisplay", "🚀 MATCHED StartTaskMessage - calling handleStartTaskCommand")
-                    handleStartTaskCommand(message)
-                }
-
-                is EndTaskMessage -> {
-                    Log.d("StroopDisplay", "🛑 MATCHED EndTaskMessage - calling handleEndTaskCommand")
-                    handleEndTaskCommand(message)
-                }
-
-                is TaskResetCommand -> {
-                    Log.d("StroopDisplay", "🔄 MATCHED TaskResetCommand - calling handleResetTaskCommand")
-                    handleResetTaskCommand(message)
-                }
-
-                else -> {
-                    Log.w("StroopDisplay", "❓ UNMATCHED MESSAGE TYPE")
-                    Log.w("StroopDisplay", "Message class: ${message::class.java.name}")
-                    Log.w("StroopDisplay", "Available interfaces: ${message::class.java.interfaces.contentToString()}")
-                    Log.w("StroopDisplay", "Message superclass: ${message::class.java.superclass?.name}")
-                    Log.w("StroopDisplay", "Ignoring non-task command: ${message.messageType}")
-                }
-            }
+            handleEndTaskCommand(message)
         }
-
-        Log.d("StroopDisplay", "=== MASTER COMMAND HANDLING COMPLETE ===")
     }
 
     /**
-     * Handle START_TASK command from Master
+     * Handle PAUSE_TASK command forwarded from MainActivity
+     */
+    fun handlePauseTaskFromMaster(message: PauseTaskMessage) {
+        Log.d("StroopDisplay", "⏸️ === RECEIVED PAUSE TASK FROM MAINACTIVITY ===")
+        Log.d("StroopDisplay", "Task ID: ${message.taskId}")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+
+        viewModelScope.launch {
+            handlePauseTaskCommand(message)
+        }
+    }
+
+    /**
+     * Handle RESUME_TASK command forwarded from MainActivity
+     */
+    fun handleResumeTaskFromMaster(message: ResumeTaskMessage) {
+        Log.d("StroopDisplay", "▶️ === RECEIVED RESUME TASK FROM MAINACTIVITY ===")
+        Log.d("StroopDisplay", "Task ID: ${message.taskId}")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+
+        viewModelScope.launch {
+            handleResumeTaskCommand(message)
+        }
+    }
+
+    /**
+     * Handle RESET_TASK command forwarded from MainActivity
+     */
+    fun handleResetTaskFromMaster(message: TaskResetCommand) {
+        Log.d("StroopDisplay", "🔄 === RECEIVED RESET TASK FROM MAINACTIVITY ===")
+        Log.d("StroopDisplay", "Session ID: ${message.sessionId}")
+
+        viewModelScope.launch {
+            handleResetTaskCommand(message)
+        }
+    }
+
+    /**
+     * Handle START_TASK command from Master (still called directly for activity launch)
      * ENHANCED: Added comprehensive debug logging to trace masterControlled state
      */
     private suspend fun handleStartTaskCommand(message: StartTaskMessage) {
@@ -233,34 +278,155 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
     }
 
     /**
+     * Handle PAUSE_TASK command from Master
+     * ENHANCED: Pause current Stroop display and timing
+     */
+    private suspend fun handlePauseTaskCommand(message: PauseTaskMessage) {
+        Log.d("StroopDisplay", "=== HANDLING PAUSE TASK COMMAND ===")
+        Log.d("StroopDisplay", "Pausing task: ${message.taskId}")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+        Log.d("StroopDisplay", "Is task running: $isTaskRunning")
+
+        if (message.taskId == currentTaskId && isTaskRunning) {
+            Log.d("StroopDisplay", "✅ Valid pause command - pausing immediately")
+
+            // 🎯 PAUSE current operations
+            currentJob?.cancel()
+            Log.d("StroopDisplay", "Cancelled current display job")
+
+            // 🎯 Update display state to show paused status
+            _displayState.value = StimulusDisplayState.PAUSED
+            _displayContent.value = DisplayContent.PausedScreen
+            Log.d("StroopDisplay", "Set display to paused screen")
+
+            // 🎯 Send confirmation to Master
+            sendTaskStatusToMaster(message.taskId, TaskStatus.PAUSED)
+            Log.d("StroopDisplay", "✅ Sent pause confirmation to Master")
+
+        } else {
+            Log.w("StroopDisplay", "❌ Pause command ignored - task ID mismatch or not running")
+            Log.w("StroopDisplay", "Message task ID: ${message.taskId}, Current: $currentTaskId, Running: $isTaskRunning")
+        }
+
+        Log.d("StroopDisplay", "=== PAUSE TASK COMMAND HANDLING COMPLETE ===")
+    }
+
+    /**
+     * Handle RESUME_TASK command from Master
+     * ENHANCED: Resume paused Stroop display from current state
+     */
+    private suspend fun handleResumeTaskCommand(message: ResumeTaskMessage) {
+        Log.d("StroopDisplay", "=== HANDLING RESUME TASK COMMAND ===")
+        Log.d("StroopDisplay", "Resuming task: ${message.taskId}")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+        Log.d("StroopDisplay", "Current display state: ${_displayState.value}")
+
+        if (message.taskId == currentTaskId && _displayState.value == StimulusDisplayState.PAUSED) {
+            Log.d("StroopDisplay", "✅ Valid resume command - resuming from pause")
+
+            // 🎯 Get current task execution state
+            val currentExecution = _taskExecutionState.value
+            if (currentExecution != null && !currentExecution.hasTimedOut()) {
+                Log.d("StroopDisplay", "Resuming task execution")
+
+                // 🎯 Send status update to Master
+                sendTaskStatusToMaster(message.taskId, TaskStatus.ACTIVE)
+
+                // 🎯 Resume from where we left off
+                when {
+                    // If we were in countdown, resume countdown
+                    currentExecution.countdownState != null && !currentExecution.countdownState.isComplete -> {
+                        Log.d("StroopDisplay", "Resuming countdown from: ${currentExecution.countdownState.currentNumber}")
+                        _displayState.value = StimulusDisplayState.COUNTDOWN
+                        startCountdown(currentExecution)
+                    }
+
+                    // If we were displaying a Stroop, resume Stroop sequence
+                    currentExecution.currentStimulus != null -> {
+                        Log.d("StroopDisplay", "Resuming Stroop sequence")
+                        _displayState.value = StimulusDisplayState.DISPLAY
+                        generateAndDisplayNextStimulus(currentExecution)
+                    }
+
+                    // If we were in interval, resume interval or generate next Stroop
+                    else -> {
+                        Log.d("StroopDisplay", "Resuming with next Stroop generation")
+                        _displayState.value = StimulusDisplayState.DISPLAY
+                        generateAndDisplayNextStimulus(currentExecution)
+                    }
+                }
+
+                Log.d("StroopDisplay", "✅ Task resumed successfully")
+            } else {
+                Log.w("StroopDisplay", "❌ Cannot resume - task execution invalid or timed out")
+                sendErrorToMaster("RESUME_FAILED", "Task execution invalid or timed out")
+            }
+
+        } else {
+            Log.w("StroopDisplay", "❌ Resume command ignored - task ID mismatch or not paused")
+            Log.w("StroopDisplay", "Message task ID: ${message.taskId}, Current: $currentTaskId")
+            Log.w("StroopDisplay", "Current state: ${_displayState.value}, Expected: PAUSED")
+        }
+
+        Log.d("StroopDisplay", "=== RESUME TASK COMMAND HANDLING COMPLETE ===")
+    }
+
+    /**
      * Handle END_TASK command from Master
-     * DEFENSIVE: Handle different message structures safely
+     * ENHANCED: Immediately stop Stroop display and send confirmation
      */
     private suspend fun handleEndTaskCommand(message: EndTaskMessage) {
+        Log.d("StroopDisplay", "=== HANDLING END TASK COMMAND ===")
+
         // Extract reason from message - handle different property names
         val reasonText = try {
             val field = message::class.java.getDeclaredField("reason")
             field.isAccessible = true
             field.get(message)?.toString() ?: "UNKNOWN"
         } catch (e: Exception) {
-            android.util.Log.w("StroopDisplay", "EndTaskMessage missing reason property", e)
-            "MANUAL_STOP"
+            Log.w("StroopDisplay", "EndTaskMessage missing reason property", e)
+            "MASTER_STOP"
         }
 
-        android.util.Log.d("StroopDisplay", "Ending task from Master: ${message.taskId}, reason: $reasonText")
+        Log.d("StroopDisplay", "Master ending task: ${message.taskId}, reason: $reasonText")
+        Log.d("StroopDisplay", "Current task ID: $currentTaskId")
+        Log.d("StroopDisplay", "Is task running: $isTaskRunning")
 
         if (message.taskId == currentTaskId && isTaskRunning) {
-            // Stop current task immediately
-            currentJob?.cancel()
+            Log.d("StroopDisplay", "✅ Valid end task command - stopping immediately")
 
+            // 🎯 IMMEDIATELY stop current Stroop display
+            currentJob?.cancel()
+            Log.d("StroopDisplay", "Cancelled current display job")
+
+            // 🎯 IMMEDIATELY go to black screen
+            _displayState.value = StimulusDisplayState.COMPLETED
+            _displayContent.value = DisplayContent.BlackScreen
+            Log.d("StroopDisplay", "Set display to black screen")
+
+            // 🎯 Send final Stroop ended message if we were in middle of Stroop
+            if (_displayState.value == StimulusDisplayState.DISPLAY) {
+                Log.d("StroopDisplay", "Sending final StroopEnded message for interrupted Stroop")
+                sendStroopEndedToMaster(stimulusSequenceNumber, StroopEndReason.TASK_STOPPED, 0L)
+            }
+
+            // Get current execution for completion
             val currentExecution = _taskExecutionState.value
             if (currentExecution != null) {
+                Log.d("StroopDisplay", "Completing task with Master initiation")
                 completeTask(currentExecution, masterInitiated = true)
             }
 
-            // Send confirmation to Master
+            // 🎯 Send confirmation to Master that we've stopped
             sendTaskStatusToMaster(message.taskId, TaskStatus.COMPLETED)
+            Log.d("StroopDisplay", "✅ Sent completion confirmation to Master")
+
+        } else {
+            Log.w("StroopDisplay", "❌ End task command ignored - task ID mismatch or not running")
+            Log.w("StroopDisplay", "Message task ID: ${message.taskId}, Current: $currentTaskId, Running: $isTaskRunning")
         }
+
+        Log.d("StroopDisplay", "=== END TASK COMMAND HANDLING COMPLETE ===")
     }
 
     /**
@@ -832,6 +998,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * Send Stroop ended message to Master
+     * ENHANCED: Added more end reasons for different scenarios
      */
     private fun sendStroopEndedToMaster(stroopIndex: Int, endReason: StroopEndReason, duration: Long) {
         try {
@@ -848,11 +1015,11 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
             viewModelScope.launch {
                 networkService?.sendMessage(stroopEnded)
-                android.util.Log.d("StroopDisplay", "Sent StroopEnded to Master: reason=$endReason")
+                Log.d("StroopDisplay", "Sent StroopEnded to Master: reason=$endReason, duration=${duration}ms")
             }
 
         } catch (e: Exception) {
-            android.util.Log.e("StroopDisplay", "Error sending Stroop ended to Master", e)
+            Log.e("StroopDisplay", "Error sending Stroop ended to Master", e)
         }
     }
 
@@ -1093,6 +1260,16 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
     override fun onCleared() {
         super.onCleared()
+
+        // ✅ NEW: Unregister from MainActivity when ViewModel is destroyed
+        try {
+            val mainActivity = MainActivity.getInstance()
+            mainActivity?.unregisterStroopViewModel()
+            Log.d("StroopDisplay", "✅ Successfully unregistered from MainActivity")
+        } catch (e: Exception) {
+            Log.e("StroopDisplay", "❌ Failed to unregister from MainActivity", e)
+        }
+
         currentJob?.cancel()
         isTaskRunning = false
     }
@@ -1106,6 +1283,7 @@ sealed class DisplayContent {
     data class Stroop(val stimulus: StroopStimulus) : DisplayContent()
     object Interval : DisplayContent()
     object BlackScreen : DisplayContent()
+    object PausedScreen : DisplayContent()
 }
 
 /**

@@ -17,6 +17,7 @@ import com.research.projector.network.ProjectorNetworkManager
 import com.research.projector.utils.StroopGenerator
 import com.research.projector.viewmodels.ConfigState
 import com.research.projector.viewmodels.TaskSelectionViewModel
+import com.research.projector.viewmodels.StroopDisplayViewModel
 import com.research.shared.network.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -25,8 +26,8 @@ import java.net.NetworkInterface
 
 /**
  * Main entry point activity for the Stroop Research app.
- * ENHANCED: Now handles Master command integration and activity launches
- * FIXED: Properly passes Master control information to StroopDisplayActivity
+ * ENHANCED: Now serves as central message router for all Master commands
+ * SIMPLIFIED: Single point of message handling eliminates routing conflicts
  */
 class MainActivity : AppCompatActivity() {
 
@@ -38,12 +39,23 @@ class MainActivity : AppCompatActivity() {
     private var isTaskRunning = false
     private var currentTaskId: String? = null
 
+    // ✅ NEW: Reference to active StroopDisplayViewModel for message forwarding
+    private var currentStroopViewModel: StroopDisplayViewModel? = null
+
     companion object {
         private const val REQUEST_CODE_STROOP_DISPLAY = 1001
+
+        // ✅ NEW: Static reference for ViewModel registration
+        private var instance: MainActivity? = null
+
+        fun getInstance(): MainActivity? = instance
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ✅ NEW: Set static instance for ViewModel access
+        instance = this
 
         android.util.Log.d("StroopApp", "MainActivity onCreate started")
 
@@ -72,8 +84,8 @@ class MainActivity : AppCompatActivity() {
         // Set up click listeners
         setupClickListeners()
 
-        // CRITICAL: Set up Master command listening
-        setupMasterCommandListener()
+        // CRITICAL: Set up centralized Master command listening
+        setupCentralizedMasterCommandListener()
 
         android.util.Log.d("StroopApp", "MainActivity onCreate completed")
 
@@ -88,34 +100,100 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * CRITICAL FIX: Set up listener for Master commands to launch activities
+     * ✅ NEW: Centralized Master command listener - handles ALL Master messages
+     * Routes messages appropriately between MainActivity and StroopDisplayViewModel
      */
-    private fun setupMasterCommandListener() {
-        android.util.Log.d("ProjectorApp", "Setting up Master command listener")
+    private fun setupCentralizedMasterCommandListener() {
+        android.util.Log.d("ProjectorApp", "🎯 Setting up CENTRALIZED Master command listener")
 
         lifecycleScope.launch {
-            networkService.receiveMessages().collectLatest { message ->
-                android.util.Log.d("ProjectorApp", "Received Master message: ${message.messageType}")
+            networkService.receiveMessages().collect { message ->
+                android.util.Log.d("ProjectorApp", "")
+                android.util.Log.d("ProjectorApp", "📨 === CENTRAL MESSAGE ROUTER ===")
+                android.util.Log.d("ProjectorApp", "Message type: ${message.messageType}")
+                android.util.Log.d("ProjectorApp", "Message class: ${message::class.java.simpleName}")
+                android.util.Log.d("ProjectorApp", "Current time: ${System.currentTimeMillis()}")
+                android.util.Log.d("ProjectorApp", "Active ViewModel: ${currentStroopViewModel != null}")
 
                 when (message) {
                     is StartTaskMessage -> {
+                        android.util.Log.d("ProjectorApp", "🚀 Handling StartTaskMessage in MainActivity")
                         handleStartTaskCommand(message)
                     }
 
-                    is EndTaskMessage -> {
-                        handleEndTaskCommand(message)
-                    }
-
                     is TaskResetCommand -> {
+                        android.util.Log.d("ProjectorApp", "🔄 Handling TaskResetCommand in MainActivity")
                         handleResetTaskCommand(message)
                     }
 
+                    // ✅ NEW: Forward task control messages to active ViewModel
+                    is EndTaskMessage -> {
+                        android.util.Log.d("ProjectorApp", "🛑 Forwarding EndTaskMessage to ViewModel")
+                        if (currentStroopViewModel != null) {
+                            android.util.Log.d("ProjectorApp", "✅ ViewModel available - forwarding message")
+                            currentStroopViewModel!!.handleEndTaskFromMaster(message)
+                        } else {
+                            android.util.Log.w("ProjectorApp", "❌ No ViewModel available to handle EndTaskMessage")
+                        }
+                    }
+
+                    is PauseTaskMessage -> {
+                        android.util.Log.d("ProjectorApp", "⏸️ Forwarding PauseTaskMessage to ViewModel")
+                        if (currentStroopViewModel != null) {
+                            android.util.Log.d("ProjectorApp", "✅ ViewModel available - forwarding message")
+                            currentStroopViewModel!!.handlePauseTaskFromMaster(message)
+                        } else {
+                            android.util.Log.w("ProjectorApp", "❌ No ViewModel available to handle PauseTaskMessage")
+                        }
+                    }
+
+                    is ResumeTaskMessage -> {
+                        android.util.Log.d("ProjectorApp", "▶️ Forwarding ResumeTaskMessage to ViewModel")
+                        if (currentStroopViewModel != null) {
+                            android.util.Log.d("ProjectorApp", "✅ ViewModel available - forwarding message")
+                            currentStroopViewModel!!.handleResumeTaskFromMaster(message)
+                        } else {
+                            android.util.Log.w("ProjectorApp", "❌ No ViewModel available to handle ResumeTaskMessage")
+                        }
+                    }
+
+                    is HeartbeatMessage -> {
+                        android.util.Log.v("ProjectorApp", "💗 Heartbeat received - ignoring")
+                        // Don't log heartbeats to reduce noise
+                    }
+
+                    is HandshakeResponseMessage -> {
+                        android.util.Log.d("ProjectorApp", "🤝 Handshake response received - ignoring")
+                        // Handshake responses are handled by connection logic
+                    }
+
                     else -> {
-                        android.util.Log.d("ProjectorApp", "Ignoring non-task message: ${message.messageType}")
+                        android.util.Log.w("ProjectorApp", "❓ Unhandled message type: ${message.messageType}")
                     }
                 }
+
+                android.util.Log.d("ProjectorApp", "📨 === MESSAGE ROUTING COMPLETE ===")
+                android.util.Log.d("ProjectorApp", "")
             }
         }
+    }
+
+    /**
+     * ✅ NEW: Method for StroopDisplayViewModel to register itself for message forwarding
+     */
+    fun registerStroopViewModel(viewModel: StroopDisplayViewModel) {
+        currentStroopViewModel = viewModel
+        android.util.Log.d("ProjectorApp", "✅ StroopDisplayViewModel REGISTERED for message forwarding")
+        android.util.Log.d("ProjectorApp", "ViewModel instance: ${viewModel.hashCode()}")
+    }
+
+    /**
+     * ✅ NEW: Method for StroopDisplayViewModel to unregister itself
+     */
+    fun unregisterStroopViewModel() {
+        val wasRegistered = currentStroopViewModel != null
+        currentStroopViewModel = null
+        android.util.Log.d("ProjectorApp", "🔄 StroopDisplayViewModel UNREGISTERED (was registered: $wasRegistered)")
     }
 
     /**
@@ -202,24 +280,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Handle END_TASK command from Master
-     */
-    private fun handleEndTaskCommand(message: EndTaskMessage) {
-        android.util.Log.d("ProjectorApp", "=== HANDLING END TASK COMMAND ===")
-        android.util.Log.d("ProjectorApp", "Task ID: ${message.taskId}")
-        android.util.Log.d("ProjectorApp", "Current task ID: $currentTaskId")
-        android.util.Log.d("ProjectorApp", "Is task running: $isTaskRunning")
-
-        if (message.taskId == currentTaskId && isTaskRunning) {
-            // Task should be ended - the StroopDisplayActivity should handle this
-            // through its own ViewModel listening to the same message stream
-            android.util.Log.d("ProjectorApp", "✅ Task end command acknowledged - StroopDisplayViewModel will handle it")
-        } else {
-            android.util.Log.w("ProjectorApp", "❌ End task command ignored - task ID mismatch or not running")
-        }
-    }
-
-    /**
      * Handle RESET_TASK command from Master
      */
     private fun handleResetTaskCommand(message: TaskResetCommand) {
@@ -229,10 +289,13 @@ class MainActivity : AppCompatActivity() {
         isTaskRunning = false
         currentTaskId = null
 
-        android.util.Log.d("ProjectorApp", "✅ Task state reset - isTaskRunning: false, currentTaskId: null")
+        // If there's an active ViewModel, tell it to reset too
+        if (currentStroopViewModel != null) {
+            android.util.Log.d("ProjectorApp", "🔄 Forwarding reset to ViewModel")
+            currentStroopViewModel!!.handleResetTaskFromMaster(message)
+        }
 
-        // If StroopDisplayActivity is running, it should handle the reset
-        // and return to this activity
+        android.util.Log.d("ProjectorApp", "✅ Task state reset - isTaskRunning: false, currentTaskId: null")
     }
 
     /**
@@ -419,6 +482,7 @@ class MainActivity : AppCompatActivity() {
 
         // Observe connection state
         lifecycleScope.launch {
+
             networkService.connectionState.collect { state ->
                 android.util.Log.d("ProjectorApp", "Network state changed: $state")
 
@@ -579,8 +643,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // REMOVED: onBackPressed() method - now handled by OnBackPressedDispatcher in onCreate()
-
     /**
      * Handle activity lifecycle - refresh config state when returning
      */
@@ -600,6 +662,12 @@ class MainActivity : AppCompatActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
+
+        // ✅ NEW: Clear static instance
+        if (instance == this) {
+            instance = null
+        }
+
         android.util.Log.d("ProjectorApp", "MainActivity onDestroy - keeping network service running")
         // Don't stop the network service here - let it continue running
         // ProjectorNetworkManager.stop() // Only call this when app is completely shutting down

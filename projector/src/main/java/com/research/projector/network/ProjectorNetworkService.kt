@@ -173,15 +173,21 @@ class ProjectorNetworkService(
      * Receive incoming messages as a Flow
      * ENHANCED: Added error handling for message flow
      */
-    fun receiveMessages(): Flow<NetworkMessage> = flow {
+    fun receiveMessages(): SharedFlow<NetworkMessage> = flow {
+        Log.d("ProjectorNetwork", "🔥 NEW FLOW COLLECTOR STARTED")
         try {
             for (message in incomingMessages) {
+                Log.d("ProjectorNetwork", "🔥 EMITTING MESSAGE: ${message.messageType}")
                 emit(message)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error in message flow", e)
+            Log.e("ProjectorNetwork", "Error in message flow", e)
         }
-    }
+    }.shareIn(
+        scope = GlobalScope, // or whatever scope you used
+        started = SharingStarted.WhileSubscribed(),
+        replay = 0
+    )
 
     /**
      * Start the TCP server and register NSD service

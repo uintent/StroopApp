@@ -332,6 +332,24 @@ enum class TaskStatus {
 }
 
 @Serializable
+data class PauseTaskMessage(
+    override val sessionId: String,
+    override val timestamp: Long = System.currentTimeMillis(),
+    val taskId: String
+) : NetworkMessage() {
+    override val messageType = MessageType.PAUSE_TASK
+}
+
+@Serializable
+data class ResumeTaskMessage(
+    override val sessionId: String,
+    override val timestamp: Long = System.currentTimeMillis(),
+    val taskId: String
+) : NetworkMessage() {
+    override val messageType = MessageType.RESUME_TASK
+}
+
+@Serializable
 data class ErrorMessage(
     override val sessionId: String,
     override val timestamp: Long = System.currentTimeMillis(),

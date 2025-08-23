@@ -957,6 +957,9 @@ class ColorDisplayActivity : AppCompatActivity() {
 
         Log.d("TaskControl", "Completing task: $taskIdValue with condition: $condition")
 
+        // 🎯 NEW: Immediately update UI to show task completion in progress
+        showTaskCompletion(condition)
+
         lifecycleScope.launch {
             val success = taskControlManager.endTask(taskIdValue, condition, sessionIdValue)
 
@@ -966,9 +969,61 @@ class ColorDisplayActivity : AppCompatActivity() {
                     "Failed to end task.",
                     Snackbar.LENGTH_LONG
                 ).show()
+
+                // Reset UI on failure - don't try to change state, just show error
+                // The taskControlManager will handle the actual state management
+                Log.w("TaskControl", "Failed to end task, letting TaskControlManager handle state")
             }
             // Success feedback is handled by TaskState.Completed in updateButtonStates
         }
+    }
+
+    /**
+     * 🎯 NEW: Show task completion state immediately when user presses Success/Failed/Given Up
+     */
+    private fun showTaskCompletion(condition: String) {
+        Log.d("TaskControl", "Showing task completion UI for condition: $condition")
+
+        // Update status
+        binding.textStroopStatus.text = "Task Ending - $condition"
+
+        // Update Stroop display area
+        binding.textCurrentColor.text = "Task ended by moderator"
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+
+        // Hide all task control buttons
+        binding.btnTriggerStroop.visibility = View.GONE
+        binding.btnPauseTask.visibility = View.GONE
+        binding.btnResumeTask.visibility = View.GONE
+        binding.btnResetTask.visibility = View.GONE
+
+        // Hide task completion buttons (they just got pressed)
+        binding.btnTaskSuccess.visibility = View.GONE
+        binding.btnTaskFailed.visibility = View.GONE
+        binding.btnTaskGivenUp.visibility = View.GONE
+
+        // Disable response buttons immediately
+        setResponseButtonsState(false)
+
+        // Show return button (enabled and distinctive)
+        binding.btnReturnToTasks.visibility = View.VISIBLE
+        binding.btnReturnToTasks.isEnabled = true
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+        // Reset state flags
+        isStroopActive = false
+        currentStroopWord = null
+        responseButtonsActive = false
+
+        // Show completion notification
+        Snackbar.make(
+            binding.root,
+            "Task ended: $condition - Stopping Projector display",
+            Snackbar.LENGTH_LONG
+        ).show()
+
+        Log.d("TaskControl", "Task completion UI setup complete")
     }
 
     override fun onSupportNavigateUp(): Boolean {

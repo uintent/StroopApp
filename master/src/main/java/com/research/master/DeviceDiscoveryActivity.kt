@@ -29,7 +29,7 @@ import androidx.appcompat.app.AlertDialog
 /**
  * Activity for discovering and connecting to Projector devices
  * Loads configuration on startup and manages device connections
- * FIXED: Now properly calls startSession() after successful connection
+ * UPDATED: Now navigates to MainSessionActivity after successful connection
  */
 class DeviceDiscoveryActivity : AppCompatActivity() {
 
@@ -211,7 +211,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
     /**
      * Attempt manual connection
-     * FIXED: Now properly calls startSession() after successful connection
+     * UPDATED: Now navigates to MainSessionActivity after successful connection
      */
     private fun attemptManualConnection() {
         // First check if configuration is ready
@@ -305,9 +305,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                         Snackbar.LENGTH_SHORT
                     ).show()
 
-                    // Navigate to Participant Info after a brief delay
+                    // UPDATED: Navigate to Main Session Manager after a brief delay
                     kotlinx.coroutines.delay(1000)
-                    startActivity(Intent(this@DeviceDiscoveryActivity, ParticipantInfoActivity::class.java))
+                    startActivity(Intent(this@DeviceDiscoveryActivity, MainSessionActivity::class.java))
 
                 } else {
                     Log.e("MasterNetwork", "Manual connection failed")
@@ -449,7 +449,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
     /**
      * Connect to discovered device
-     * FIXED: Now properly calls startSession() after successful connection
+     * UPDATED: Now navigates to MainSessionActivity after successful connection
      */
     private fun connectToDevice(device: MasterNetworkClient.DiscoveredDevice) {
         if (!MasterConfigManager.isConfigurationReady()) {
@@ -472,7 +472,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     // Wait for handshake to be processed by Projector
                     kotlinx.coroutines.delay(500)
 
-                    navigateToParticipantInfo()
+                    navigateToMainSessionManager()
                 }
             } catch (e: Exception) {
                 Log.e("MasterNetwork", "Connection failed", e)
@@ -486,19 +486,31 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
     }
 
     /**
-     * Navigate to participant information after successful connection
+     * Navigate to main session manager after successful connection
+     * UPDATED: Now goes to MainSessionActivity instead of ParticipantInfoActivity
      */
+    private fun navigateToMainSessionManager() {
+        val intent = Intent(this, MainSessionActivity::class.java)
+        startActivity(intent)
+    }
+
+    /**
+     * Navigate to participant information screen
+     * @deprecated Use navigateToMainSessionManager() instead for proper session management
+     */
+    @Deprecated("Use navigateToMainSessionManager() instead")
     private fun navigateToParticipantInfo() {
-        val intent = Intent(this, ParticipantInfoActivity::class.java)
+        val intent = Intent(this, MainSessionActivity::class.java)
         startActivity(intent)
     }
 
     /**
      * Navigate to main activity after successful connection
-     * @deprecated Use navigateToParticipantInfo() instead
+     * @deprecated Use navigateToMainSessionManager() instead for proper session management
      */
+    @Deprecated("Use navigateToMainSessionManager() instead")
     private fun navigateToMain() {
-        val intent = Intent(this, ParticipantInfoActivity::class.java)
+        val intent = Intent(this, MainSessionActivity::class.java)
         startActivity(intent)
     }
 
