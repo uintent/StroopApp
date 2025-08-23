@@ -1,134 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     tools:context=".TaskSelectionActivity">
 
-    <!-- Empty state when no tasks/task lists are available -->
-    <TextView
-        android:id="@+id/text_empty_state"
+    <!-- Add AppBarLayout with Toolbar for back button -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorPrimary"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Main content with scroll behavior -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:padding="32dp"
-        android:text="No tasks or task lists available.\n\nPlease check your configuration file."
-        android:textSize="16sp"
-        android:textColor="?android:attr/textColorSecondary"
-        android:visibility="gone" />
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <!-- Main content scroll view -->
-    <ScrollView
-        android:id="@+id/scroll_view_content"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
-
-        <LinearLayout
+        <!-- Session Management Button at Top -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_return_to_session_manager"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_margin="16dp"
+            android:text="← Return to Session Manager"
+            android:textColor="?attr/colorPrimary"
+            app:strokeColor="?attr/colorPrimary" />
 
-            <!-- Task Lists Section (MOVED TO TOP) -->
+        <!-- Empty state when no tasks/task lists are available -->
+        <TextView
+            android:id="@+id/text_empty_state"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="No tasks or task lists available.\n\nPlease check your configuration file."
+            android:textSize="16sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone" />
+
+        <!-- Main content scroll view -->
+        <ScrollView
+            android:id="@+id/scroll_view_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true">
+
             <LinearLayout
-                android:id="@+id/section_task_lists"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:padding="16dp">
 
-                <TextView
+                <!-- Task Lists Section (MOVED TO TOP) -->
+                <LinearLayout
+                    android:id="@+id/section_task_lists"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Task Lists"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorPrimary"
-                    android:layout_marginBottom="8dp" />
+                    android:orientation="vertical">
 
-                <TextView
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Task Lists"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorPrimary"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Select a task list to run multiple tasks in sequence"
+                        android:textSize="14sp"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginBottom="16dp" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recycler_task_lists"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
+                        tools:listitem="@layout/item_task_list_card" />
+
+                    <TextView
+                        android:id="@+id/text_no_task_lists"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No task lists available"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textStyle="italic"
+                        android:padding="16dp"
+                        android:gravity="center"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginVertical="24dp"
+                    android:background="?android:attr/listDivider" />
+
+                <!-- Individual Tasks Section (MOVED TO BOTTOM) -->
+                <LinearLayout
+                    android:id="@+id/section_tasks"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Select a task list to run multiple tasks in sequence"
-                    android:textSize="14sp"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:layout_marginBottom="16dp" />
+                    android:orientation="vertical">
 
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recycler_task_lists"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    tools:listitem="@layout/item_task_list_card" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Individual Tasks"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorPrimary"
+                        android:layout_marginBottom="8dp" />
 
-                <TextView
-                    android:id="@+id/text_no_task_lists"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="No task lists available"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textStyle="italic"
-                    android:padding="16dp"
-                    android:gravity="center"
-                    android:visibility="gone" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Select a single task to run immediately"
+                        android:textSize="14sp"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:layout_marginBottom="16dp" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recycler_tasks"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false"
+                        tools:listitem="@layout/item_task_card" />
+
+                    <TextView
+                        android:id="@+id/text_no_tasks"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="No individual tasks available"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textStyle="italic"
+                        android:padding="16dp"
+                        android:gravity="center"
+                        android:visibility="gone" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginVertical="24dp"
-                android:background="?android:attr/listDivider" />
+        </ScrollView>
 
-            <!-- Individual Tasks Section (MOVED TO BOTTOM) -->
-            <LinearLayout
-                android:id="@+id/section_tasks"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
+    </LinearLayout>
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Individual Tasks"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorPrimary"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Select a single task to run immediately"
-                    android:textSize="14sp"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:layout_marginBottom="16dp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/recycler_tasks"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:nestedScrollingEnabled="false"
-                    tools:listitem="@layout/item_task_card" />
-
-                <TextView
-                    android:id="@+id/text_no_tasks"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="No individual tasks available"
-                    android:textColor="?android:attr/textColorSecondary"
-                    android:textStyle="italic"
-                    android:padding="16dp"
-                    android:gravity="center"
-                    android:visibility="gone" />
-
-            </LinearLayout>
-
-        </LinearLayout>
-
-    </ScrollView>
-
-</LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

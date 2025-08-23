@@ -36,8 +36,14 @@ class TaskSelectionActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Set up toolbar
+        setSupportActionBar(binding.toolbar)
         supportActionBar?.title = "Select Task"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        // Set up return to session manager button
+        binding.btnReturnToSessionManager.setOnClickListener {
+            returnToSessionManager()
+        }
 
         // Set up RecyclerViews
         setupRecyclerViews()
@@ -179,6 +185,19 @@ class TaskSelectionActivity : AppCompatActivity() {
         //     putExtra("TASK_LIST_SEQUENCE", taskListConfig.taskSequence)
         // }
         // startActivity(intent)
+    }
+
+    /**
+     * Return to Session Manager screen
+     */
+    private fun returnToSessionManager() {
+        Log.d("TaskSelection", "Returning to Session Manager")
+
+        val intent = Intent(this, MainSessionActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        startActivity(intent)
+        finish()
     }
 
     private fun showConfigError(message: String = "Configuration error") {

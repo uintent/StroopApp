@@ -158,52 +158,6 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Action Buttons Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="8dp"
-                app:cardElevation="2dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Pre-Session Options"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:textColor="?attr/colorPrimary"
-                        android:layout_marginBottom="12dp" />
-
-                    <!-- Voice Recognition Check Button -->
-                    <Button
-                        android:id="@+id/btn_voice_check"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:text="Voice Recognition System Check"
-                        android:textSize="14sp"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-
-                    <!-- Settings Button -->
-                    <Button
-                        android:id="@+id/btn_settings"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Settings"
-                        android:textSize="14sp"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
             <!-- Main Action Buttons -->
             <LinearLayout
                 android:layout_width="match_parent"

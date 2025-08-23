@@ -47,6 +47,7 @@ class MainSessionActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 showDisconnectConfirmation()
+
             }
         })
 
@@ -60,6 +61,13 @@ class MainSessionActivity : AppCompatActivity() {
         // Refresh session state when returning to this activity
         checkForExistingSession()
         updateConnectionStatus()
+    }
+
+    /**
+     * Show error message
+     */
+    private fun showError(message: String) {
+        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
     }
 
     /**
@@ -81,6 +89,14 @@ class MainSessionActivity : AppCompatActivity() {
         binding.btnDisconnect.setOnClickListener {
             showDisconnectConfirmation()
         }
+
+        binding.btnEndSession.setOnClickListener {
+            showEndSessionConfirmation()
+        }
+
+        binding.btnDiscardSession.setOnClickListener {
+            showDiscardSessionConfirmation()
+        }
     }
 
     /**
@@ -89,9 +105,15 @@ class MainSessionActivity : AppCompatActivity() {
     private fun checkForExistingSession() {
         lifecycleScope.launch {
             try {
-                // Check for incomplete session
+                // Check for incomplete session (not properly ended)
                 val incompleteSession = SessionManager.checkForIncompleteSession()
                 currentSessionData = incompleteSession
+
+                // Load session into SessionManager memory so end/discard can find it
+                if (incompleteSession != null) {
+                    SessionManager.resumeSession(incompleteSession)  // ADD THIS LINE
+                    Log.d("MainSession", "Loaded session into SessionManager memory: ${incompleteSession.sessionId}")
+                }
 
                 // Update UI based on session state
                 updateSessionUI(incompleteSession)
@@ -105,27 +127,191 @@ class MainSessionActivity : AppCompatActivity() {
 
     /**
      * Update session-related UI elements
+     * Only shows resume option if there's an actual incomplete session (both ended and discarded must be exactly 0)
      */
     private fun updateSessionUI(sessionData: SessionData?) {
-        if (sessionData != null) {
-            // Show session info
+        if (sessionData != null && sessionData.ended == 0 && sessionData.discarded == 0) {
+            // Show session info for incomplete sessions only (both flags explicitly 0)
+            Log.d("MainSession", "Showing session UI for: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
+
             binding.layoutExistingSession.visibility = android.view.View.VISIBLE
             binding.textExistingSessionInfo.text = buildString {
-                append("Active Session Found:\n")
+                append("Incomplete Session Found:\n")
                 append("Participant: ${sessionData.participantName}\n")
                 append("ID: ${sessionData.participantId}\n")
-                append("Tasks completed: ${sessionData.tasks.size}")
+                append("Tasks completed: ${sessionData.tasks.size}\n")
+                append("Status: ${getSessionStatusDisplay(sessionData.sessionStatus)}")
             }
 
-            // Enable resume button
+            // Enable resume button for incomplete sessions
             binding.btnResumeSession.isEnabled = true
-            binding.btnResumeSession.text = "Resume Session"
+            binding.btnResumeSession.text = "Resume Incomplete Session"
+
+            // Show end session button for incomplete sessions
+            binding.btnEndSession.visibility = android.view.View.VISIBLE
+
+            // Show discard session button for incomplete sessions
+            binding.btnDiscardSession.visibility = android.view.View.VISIBLE
 
         } else {
-            // No existing session
+            // No incomplete session - hide resume and end session options
             binding.layoutExistingSession.visibility = android.view.View.GONE
             binding.btnResumeSession.isEnabled = false
             binding.btnResumeSession.text = "No Session to Resume"
+            binding.btnEndSession.visibility = android.view.View.GONE
+            binding.btnDiscardSession.visibility = android.view.View.GONE
+
+            if (sessionData != null) {
+                val reason = when {
+                    sessionData.ended != 0 -> "ended flag = ${sessionData.ended}"
+                    sessionData.discarded != 0 -> "discarded flag = ${sessionData.discarded}"
+                    else -> "unknown reason"
+                }
+                Log.d("MainSession", "Session not shown - $reason: ${sessionData.sessionId}")
+            } else {
+                Log.d("MainSession", "No session found")
+            }
+        }
+    }
+
+    /**
+     * Show confirmation dialog for ending and saving session
+     */
+    private fun showEndSessionConfirmation() {
+        val sessionData = currentSessionData ?: return
+
+        AlertDialog.Builder(this)
+            .setTitle("End & Save Session")
+            .setMessage("This will end the current session and save all data to a JSON file.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\nThis action cannot be undone. Continue?")
+            .setPositiveButton("End & Save Session") { _, _ ->
+                endAndSaveSession()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /**
+     * Show confirmation dialog for discarding session without saving
+     */
+    private fun showDiscardSessionConfirmation() {
+        val sessionData = currentSessionData ?: return
+
+        AlertDialog.Builder(this)
+            .setTitle("Discard Session")
+            .setMessage("This will permanently delete the current session data without saving.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\n⚠️ This action cannot be undone. All session data will be lost.")
+            .setPositiveButton("Discard Session") { _, _ ->
+                discardSession()
+            }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /**
+     * End the current session and save to JSON file
+     */
+    private fun endAndSaveSession() {
+        lifecycleScope.launch {
+            try {
+                // Disable buttons during operation
+                binding.btnEndSession.isEnabled = false
+                binding.btnResumeSession.isEnabled = false
+                binding.btnNewSession.isEnabled = false
+
+                // Show progress in the button text
+                binding.btnEndSession.text = "Saving session..."
+
+                // End the session (this will save to JSON file)
+                SessionManager.endSession()
+
+                // Clear current session state
+                currentSessionData = null
+                updateSessionUI(null)
+
+                // Re-enable new session button
+                binding.btnNewSession.isEnabled = true
+
+                // Show success message
+                Snackbar.make(
+                    binding.root,
+                    "Session ended and saved successfully!",
+                    Snackbar.LENGTH_LONG
+                ).show()
+
+                Log.d("MainSession", "Session ended and saved successfully")
+
+            } catch (e: Exception) {
+                Log.e("MainSession", "Error ending session", e)
+
+                // Re-enable buttons on error
+                binding.btnEndSession.isEnabled = true
+                binding.btnResumeSession.isEnabled = true
+                binding.btnNewSession.isEnabled = true
+                binding.btnEndSession.text = "End & Save Session"
+
+                showError("Error saving session: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Discard the current session without saving
+     */
+    private fun discardSession() {
+        lifecycleScope.launch {
+            try {
+                // Disable buttons during operation
+                binding.btnDiscardSession.isEnabled = false
+                binding.btnResumeSession.isEnabled = false
+                binding.btnEndSession.isEnabled = false
+                binding.btnNewSession.isEnabled = false
+
+                // Show progress in the button text
+                binding.btnDiscardSession.text = "Discarding session..."
+
+                // Clear the session without saving
+                SessionManager.clearSession()
+
+                // Clear current session state
+                currentSessionData = null
+                updateSessionUI(null)
+
+                // Re-enable new session button
+                binding.btnNewSession.isEnabled = true
+
+                // Show success message
+                Snackbar.make(
+                    binding.root,
+                    "Session discarded successfully",
+                    Snackbar.LENGTH_LONG
+                ).show()
+
+                Log.d("MainSession", "Session discarded without saving")
+
+            } catch (e: Exception) {
+                Log.e("MainSession", "Error discarding session", e)
+
+                // Re-enable buttons on error
+                binding.btnDiscardSession.isEnabled = true
+                binding.btnResumeSession.isEnabled = true
+                binding.btnEndSession.isEnabled = true
+                binding.btnNewSession.isEnabled = true
+                binding.btnDiscardSession.text = "Discard Session (No Save)"
+
+                showError("Error discarding session: ${e.message}")
+            }
+        }
+    }
+
+    private fun getSessionStatusDisplay(status: String): String {
+        return when (status) {
+            "in_progress" -> "In Progress"
+            "completed_normally" -> "Completed"
+            "interrupted" -> "Interrupted"
+            else -> status.replaceFirstChar { it.uppercase() }
         }
     }
 
@@ -179,9 +365,23 @@ class MainSessionActivity : AppCompatActivity() {
 
     /**
      * Resume existing session
+     * Only works if there's an actual incomplete session (both ended and discarded must be exactly 0)
      */
     private fun resumeExistingSession() {
         val sessionData = currentSessionData ?: return
+
+        // Double-check the session is actually incomplete using explicit flag checks
+        if (sessionData.ended != 0) {
+            showError("This session has already been ended (flag=${sessionData.ended}). Please start a new session.")
+            return
+        }
+
+        if (sessionData.discarded != 0) {
+            showError("This session has been discarded (flag=${sessionData.discarded}). Please start a new session.")
+            return
+        }
+
+        Log.d("MainSession", "Resuming session: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
 
         lifecycleScope.launch {
             try {
@@ -228,27 +428,16 @@ class MainSessionActivity : AppCompatActivity() {
      * Show confirmation dialog for new session when existing session exists
      */
     private fun showNewSessionConfirmation() {
+        val sessionData = currentSessionData ?: return
+
         AlertDialog.Builder(this)
             .setTitle("Start New Session")
-            .setMessage("Starting a new session will end the current session and save its data to a JSON file. Continue?")
-            .setPositiveButton("Continue") { _, _ ->
-                lifecycleScope.launch {
-                    try {
-                        // End current session and save data
-                        SessionManager.endSession()
-
-                        // Clear session state
-                        currentSessionData = null
-                        updateSessionUI(null)
-
-                        // Navigate to participant info
-                        navigateToParticipantInfo()
-
-                    } catch (e: Exception) {
-                        Log.e("MainSession", "Error ending current session", e)
-                        showError("Error saving current session: ${e.message}")
-                    }
-                }
+            .setMessage("You have an active session that needs to be handled first.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\nWhat would you like to do with the current session?")
+            .setPositiveButton("End & Save Session") { _, _ ->
+                handleCurrentSessionBeforeNew(endSession = true)
+            }
+            .setNeutralButton("Discard Session") { _, _ ->
+                handleCurrentSessionBeforeNew(endSession = false)
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
@@ -311,6 +500,7 @@ class MainSessionActivity : AppCompatActivity() {
      */
     private fun navigateToParticipantInfo() {
         val intent = Intent(this, ParticipantInfoActivity::class.java)
+        intent.putExtra("NEW_SESSION", true) // Signal this is a new session
         startActivity(intent)
     }
 
@@ -319,13 +509,48 @@ class MainSessionActivity : AppCompatActivity() {
      */
     private fun navigateToTaskSelection() {
         val intent = Intent(this, TaskSelectionActivity::class.java)
+        intent.putExtra("RESUME_SESSION", true) // Signal this is resuming a session
         startActivity(intent)
     }
 
     /**
-     * Show error message
+     * Handle the current session before starting a new one
+     * @param endSession true to end and save, false to discard
      */
-    private fun showError(message: String) {
-        Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+    private fun handleCurrentSessionBeforeNew(endSession: Boolean) {
+        lifecycleScope.launch {
+            try {
+                // Disable new session button during operation
+                binding.btnNewSession.isEnabled = false
+                binding.btnNewSession.text = if (endSession) "Saving session..." else "Discarding session..."
+
+                if (endSession) {
+                    // End current session and save data
+                    SessionManager.endSession()
+                    Log.d("MainSession", "Ended current session before starting new one")
+                } else {
+                    // Discard current session without saving
+                    SessionManager.clearSession()
+                    Log.d("MainSession", "Discarded current session before starting new one")
+                }
+
+                // Clear session state
+                currentSessionData = null
+                updateSessionUI(null)
+
+                // Navigate to participant info
+                navigateToParticipantInfo()
+
+            } catch (e: Exception) {
+                Log.e("MainSession", "Error handling current session", e)
+
+                // Re-enable button and restore text
+                binding.btnNewSession.isEnabled = true
+                binding.btnNewSession.text = "Start New Session"
+
+                val action = if (endSession) "saving" else "discarding"
+                showError("Error $action current session: ${e.message}")
+            }
+        }
     }
 }

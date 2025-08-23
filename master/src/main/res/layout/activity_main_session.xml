@@ -118,7 +118,30 @@
                         android:layout_height="wrap_content"
                         android:text=""
                         android:textSize="14sp"
-                        android:textColor="?attr/colorOnSurface" />
+                        android:textColor="?attr/colorOnSurface"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- End Session Button (only visible when there's an incomplete session) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_end_session"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="End &amp; Save Session"
+                        android:textColor="?attr/colorError"
+                        app:strokeColor="?attr/colorError"
+                        android:visibility="gone" />
+
+                    <!-- Discard Session Button (only visible when there's an incomplete session) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_discard_session"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Discard Session (No Save)"
+                        android:textColor="?attr/colorError"
+                        android:visibility="gone" />
 
                 </LinearLayout>
 
