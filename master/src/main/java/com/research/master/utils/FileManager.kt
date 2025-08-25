@@ -1,0 +1,1035 @@
+package com.research.master.utils
+
+import android.content.Context
+import android.os.Environment
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import java.nio.charset.Charset
+import com.research.shared.models.*
+import kotlinx.serialization.json.*
+
+/**
+ * Centralized file management for StroopApp.
+ * All file operations should go through this class to ensure consistency.
+ *
+ * Responsibilities:
+ * - Session JSON file creation and updates
+ * - Configuration file reading (assets and external)
+ * - SharedPreferences operations
+ * - File naming conventions and validation
+ * - Crash-safe incremental saves
+ * - Session recovery from temp files
+ * - Migration to user-selected folders
+ * - External storage management
+ */
+
+/**
+ * Participant form data for convenience storage
+ */
+data class ParticipantFormData(
+    val name: String,
+    val id: String,
+    val age: String
+)
+
+/**
+ * Internal data class to track config source
+ */
+data class ConfigSource(
+    val content: String?,
+    val source: String
+)
+
+/**
+ * Result of configuration loading operation
+ */
+sealed class ConfigLoadResult {
+    data class Success(val config: RuntimeConfig, val source: String) : ConfigLoadResult()
+    data class Error(val error: ConfigError) : ConfigLoadResult()
+}
+
+/**
+ * Specific configuration error types for better error handling
+ */
+sealed class ConfigError {
+    data class FileNotFound(val message: String) : ConfigError()
+    data class InvalidJson(val message: String) : ConfigError()
+    data class ValidationFailed(val message: String) : ConfigError()
+    data class UnexpectedError(val message: String) : ConfigError()
+}
+
+/**
+ * Structure validation results for detailed error reporting
+ */
+sealed class StructureValidationResult {
+    object Valid : StructureValidationResult()
+    data class MissingSection(val sectionName: String) : StructureValidationResult()
+    data class InvalidColors(val message: String) : StructureValidationResult()
+    data class InvalidTasks(val message: String) : StructureValidationResult()
+    data class InvalidTaskSequence(val listId: String, val taskId: String, val message: String) : StructureValidationResult()
+    data class InvalidTiming(val message: String) : StructureValidationResult()
+}
+
+/**
+ * Exception classes for better error handling
+ */
+abstract class FileManagerException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class SessionFileException(message: String, cause: Throwable? = null) : FileManagerException(message, cause)
+
+class FileManager(private val context: Context) {
+
+    companion object {
+        private const val TAG = "FileManager"
+        private const val TEMP_FILE_PREFIX = "session_"
+        private const val TEMP_FILE_SUFFIX = "_temp.json"
+        private const val JSON_FILE_EXTENSION = ".json"
+        private const val CONFIG_FILE_NAME = "research_config.json"
+        private const val EXTERNAL_CONFIG_FOLDER = "StroopApp"
+        private const val PREFS_PARTICIPANT = "participant_prefs"
+
+        // Version for future format migrations
+        private const val CURRENT_FORMAT_VERSION = "1.0"
+    }
+
+    private val gson = GsonBuilder()
+        .setPrettyPrinting()
+        .serializeNulls()
+        .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+        .create()
+
+    // For kotlinx.serialization (used by MasterConfigLoader)
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+    }
+
+    private val internalStorageDir = File(context.filesDir, "sessions")
+    private val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+    private val externalConfigDir = File(documentsDir.absolutePath, EXTERNAL_CONFIG_FOLDER)
+
+    init {
+        // Ensure internal storage directory exists
+        if (!internalStorageDir.exists()) {
+            internalStorageDir.mkdirs()
+        }
+
+        // Ensure external config directory exists
+        if (!externalConfigDir.exists()) {
+            externalConfigDir.mkdirs()
+        }
+    }
+
+    // ============================================================================
+    // CONFIGURATION FILE OPERATIONS (replacing MasterConfigLoader functionality)
+    // ============================================================================
+
+    /**
+     * Loads configuration with priority: external storage -> assets
+     * Replicates MasterConfigLoader.loadConfig() functionality
+     */
+    suspend fun loadConfiguration(): ConfigLoadResult = withContext(Dispatchers.IO) {
+        try {
+            // Step 1: Try external storage first, then fallback to assets
+            val configSource = loadConfigContent()
+
+            val jsonContent = configSource.content
+                ?: return@withContext ConfigLoadResult.Error(
+                    ConfigError.FileNotFound(
+                        "Configuration file '$CONFIG_FILE_NAME' not found in assets folder or external storage."
+                    )
+                )
+
+            // Step 2: Parse JSON using kotlinx.serialization (same as MasterConfigLoader)
+            val stroopConfig = parseJsonConfig(jsonContent)
+                ?: return@withContext ConfigLoadResult.Error(
+                    ConfigError.InvalidJson(
+                        "Configuration file contains invalid JSON format. Source: ${configSource.source}"
+                    )
+                )
+
+            // Step 3: Validate structure and content
+            when (val validationResult = stroopConfig.validate()) {
+                is ValidationResult.Success -> {
+                    ConfigLoadResult.Success(RuntimeConfig(baseConfig = stroopConfig), configSource.source)
+                }
+                is ValidationResult.Error -> {
+                    ConfigLoadResult.Error(
+                        ConfigError.ValidationFailed("${validationResult.message} Source: ${configSource.source}")
+                    )
+                }
+            }
+
+        } catch (e: Exception) {
+            ConfigLoadResult.Error(
+                ConfigError.UnexpectedError("Unexpected error loading configuration: ${e.message}")
+            )
+        }
+    }
+
+    /**
+     * Load configuration content from external storage or assets
+     * Replicates MasterConfigLoader.loadConfigContent()
+     */
+    private fun loadConfigContent(): ConfigSource {
+        // Try external storage first
+        val externalContent = loadConfigFileFromExternal()
+        if (externalContent != null) {
+            return ConfigSource(externalContent, "External Storage: ${getExternalConfigPath()}")
+        }
+
+        // Fallback to assets
+        val assetsContent = loadConfigFileFromAssets()
+        return ConfigSource(assetsContent, "App Assets (default)")
+    }
+
+    /**
+     * Loads raw JSON content from external storage
+     * Replicates MasterConfigLoader.loadConfigFileFromExternal()
+     */
+    private fun loadConfigFileFromExternal(): String? {
+        return try {
+            val configFile = File(getExternalConfigPath())
+            if (configFile.exists()) {
+                configFile.readText(Charset.forName("UTF-8"))
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read external config", e)
+            null
+        }
+    }
+
+    /**
+     * Loads raw JSON content from assets folder
+     * Replicates MasterConfigLoader.loadConfigFileFromAssets()
+     */
+    private fun loadConfigFileFromAssets(): String? {
+        return try {
+            context.assets.open(CONFIG_FILE_NAME).use { inputStream ->
+                inputStream.bufferedReader().use { reader ->
+                    reader.readText()
+                }
+            }
+        } catch (e: IOException) {
+            Log.w(TAG, "Failed to read config from assets", e)
+            null
+        }
+    }
+
+    /**
+     * Copy default configuration from assets to external storage
+     * Replicates MasterConfigLoader.copyDefaultConfigToExternal()
+     */
+    suspend fun copyDefaultConfigToExternal(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            externalConfigDir.mkdirs()
+            val configFile = File(externalConfigDir, CONFIG_FILE_NAME)
+
+            context.assets.open(CONFIG_FILE_NAME).use { input ->
+                configFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            Log.i(TAG, "Default config copied to external storage")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy default config to external storage", e)
+            false
+        }
+    }
+
+    /**
+     * Get full path to external config file
+     * Replicates MasterConfigLoader.getExternalConfigPath()
+     */
+    fun getExternalConfigPath(): String {
+        return File(externalConfigDir, CONFIG_FILE_NAME).absolutePath
+    }
+
+    /**
+     * Check if external config file exists
+     * Replicates MasterConfigLoader.hasExternalConfig()
+     */
+    fun hasExternalConfig(): Boolean {
+        val configFile = File(getExternalConfigPath())
+        return configFile.exists()
+    }
+
+    /**
+     * Get external config directory path
+     * Replicates MasterConfigLoader.getExternalConfigDirectory()
+     */
+    fun getExternalConfigDirectory(): String {
+        return externalConfigDir.absolutePath
+    }
+
+    /**
+     * Parse JSON content into StroopConfig using kotlinx.serialization
+     * Replicates MasterConfigLoader.parseJsonConfig()
+     */
+    private fun parseJsonConfig(jsonContent: String): StroopConfig? {
+        return try {
+            // First check if JSON has required top-level sections
+            val jsonElement = json.parseToJsonElement(jsonContent)
+            val jsonObject = jsonElement.jsonObject
+
+            // Check for required sections
+            val requiredSections = listOf("stroop_colors", "tasks", "task_lists", "timing")
+            requiredSections.forEach { section ->
+                if (!jsonObject.containsKey(section)) {
+                    throw kotlinx.serialization.SerializationException("Missing required section: $section")
+                }
+            }
+
+            // Parse the full configuration
+            json.decodeFromString<StroopConfig>(jsonContent)
+
+        } catch (e: SerializationException) {
+            Log.e(TAG, "JSON parsing error", e)
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected parsing error", e)
+            null
+        }
+    }
+
+    /**
+     * Validates configuration structure
+     * Replicates MasterConfigLoader.validateConfigStructure()
+     */
+    fun validateConfigStructure(config: StroopConfig): StructureValidationResult {
+        // Check stroop colors
+        if (config.stroopColors.isEmpty()) {
+            return StructureValidationResult.MissingSection("stroop_colors")
+        }
+
+        if (config.stroopColors.size < 2) {
+            return StructureValidationResult.InvalidColors(
+                "Invalid color configuration. At least 2 colors required and all must be valid hex codes."
+            )
+        }
+
+        // Validate hex color format
+        config.stroopColors.forEach { (colorName, hexValue) ->
+            if (!isValidHexColor(hexValue)) {
+                return StructureValidationResult.InvalidColors(
+                    "Invalid hex color '$hexValue' for color '$colorName'. Must be valid hex format (e.g., #FF0000)."
+                )
+            }
+        }
+
+        // Check tasks
+        if (config.tasks.isEmpty()) {
+            return StructureValidationResult.InvalidTasks(
+                "Invalid task configuration. All tasks must have positive timeout values."
+            )
+        }
+
+        config.tasks.forEach { (taskId, taskConfig) ->
+            if (taskConfig.timeoutSeconds <= 0) {
+                return StructureValidationResult.InvalidTasks(
+                    "Task '$taskId' has invalid timeout: ${taskConfig.timeoutSeconds}. Must be positive."
+                )
+            }
+        }
+
+        // Check task lists
+        if (config.taskLists.isEmpty()) {
+            return StructureValidationResult.MissingSection("task_lists")
+        }
+
+        config.taskLists.forEach { (listId, taskList) ->
+            val taskIds = taskList.getTaskIds()
+
+            if (taskIds.isEmpty()) {
+                return StructureValidationResult.InvalidTaskSequence(
+                    listId, "", "Task sequence '$listId' is empty or contains no valid tasks."
+                )
+            }
+
+            taskIds.forEach { taskId ->
+                if (taskId !in config.tasks.keys) {
+                    return StructureValidationResult.InvalidTaskSequence(
+                        listId, taskId, "Invalid task sequence '$listId'. Task ID '$taskId' does not exist in tasks configuration."
+                    )
+                }
+            }
+        }
+
+        // Check timing
+        val timing = config.timing
+        if (timing.stroopDisplayDuration <= 0 || timing.minInterval <= 0 ||
+            timing.maxInterval <= 0 || timing.countdownDuration <= 0) {
+            return StructureValidationResult.InvalidTiming(
+                "Invalid timing configuration. All timing values must be positive numbers."
+            )
+        }
+
+        if (timing.minInterval > timing.maxInterval) {
+            return StructureValidationResult.InvalidTiming(
+                "Invalid timing configuration. Minimum interval (${timing.minInterval}) cannot be greater than maximum interval (${timing.maxInterval})."
+            )
+        }
+
+        return StructureValidationResult.Valid
+    }
+
+    /**
+     * Helper method to validate hex color format
+     */
+    private fun isValidHexColor(hexValue: String): Boolean {
+        return try {
+            val normalizedHex = if (hexValue.startsWith("#")) hexValue else "#$hexValue"
+            normalizedHex.matches(Regex("^#[0-9A-Fa-f]{6}$"))
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Get user-friendly error messages
+     * Replicates MasterConfigLoader.getErrorMessage()
+     */
+    fun getErrorMessage(error: ConfigError): String {
+        return when (error) {
+            is ConfigError.FileNotFound -> error.message
+            is ConfigError.InvalidJson -> error.message
+            is ConfigError.ValidationFailed -> error.message
+            is ConfigError.UnexpectedError -> error.message
+        }
+    }
+
+    // ============================================================================
+    // SHARED PREFERENCES OPERATIONS (replacing ParticipantInfoActivity functionality)
+    // ============================================================================
+
+    /**
+     * Save participant form data for convenience
+     * Replicates ParticipantInfoActivity.saveFormData()
+     */
+    fun saveParticipantFormData(name: String, id: String, age: String) {
+        try {
+            context.getSharedPreferences(PREFS_PARTICIPANT, Context.MODE_PRIVATE).edit().apply {
+                putString("last_name", name)
+                putString("last_id", id)
+                putString("last_age", age)
+                apply()
+            }
+            Log.d(TAG, "Participant form data saved")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save participant form data", e)
+        }
+    }
+
+    /**
+     * Load existing participant form data
+     * Replicates ParticipantInfoActivity.loadExistingData()
+     */
+    fun loadParticipantFormData(): ParticipantFormData {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_PARTICIPANT, Context.MODE_PRIVATE)
+            ParticipantFormData(
+                name = prefs.getString("last_name", "") ?: "",
+                id = prefs.getString("last_id", "") ?: "",
+                age = prefs.getString("last_age", "") ?: ""
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load participant form data", e)
+            ParticipantFormData("", "", "")
+        }
+    }
+
+    /**
+     * Clear participant form data
+     */
+    fun clearParticipantFormData() {
+        try {
+            context.getSharedPreferences(PREFS_PARTICIPANT, Context.MODE_PRIVATE).edit().clear().apply()
+            Log.d(TAG, "Participant form data cleared")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear participant form data", e)
+        }
+    }
+
+    // ============================================================================
+    // SESSION FILE OPERATIONS
+    // ============================================================================
+
+    /**
+     * Creates a new session file in internal storage
+     * @param sessionId Unique session identifier
+     * @param initialData Initial session data to write
+     * @return File object for the created session file
+     */
+    fun createSessionFile(sessionId: String, initialData: SessionExport): File {
+        val fileName = "$TEMP_FILE_PREFIX${sessionId}$TEMP_FILE_SUFFIX"
+        val sessionFile = File(internalStorageDir, fileName)
+
+        try {
+            writeSessionData(sessionFile, initialData)
+            Log.i(TAG, "Created new session file: ${sessionFile.absolutePath}")
+            return sessionFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create session file", e)
+            throw SessionFileException("Failed to create session file: ${e.message}")
+        }
+    }
+
+    /**
+     * Updates an existing session file with new data
+     * @param sessionFile The session file to update
+     * @param sessionData Updated session data
+     */
+    fun updateSessionFile(sessionFile: File, sessionData: SessionExport) {
+        try {
+            writeSessionData(sessionFile, sessionData)
+            Log.d(TAG, "Updated session file: ${sessionFile.name}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update session file: ${sessionFile.name}", e)
+            throw SessionFileException("Failed to update session file: ${e.message}")
+        }
+    }
+
+    /**
+     * Finalizes a session by moving it to the user-selected folder
+     * @param sessionFile Current temp session file
+     * @param sessionData Final session data (with ended/discarded flags)
+     * @param destinationFolder User-selected folder
+     * @return Final file in user folder
+     */
+    fun finalizeSession(
+        sessionFile: File,
+        sessionData: SessionExport,
+        destinationFolder: File
+    ): File {
+        try {
+            // Update with final data
+            writeSessionData(sessionFile, sessionData)
+
+            // Generate final filename
+            val finalFileName = generateFinalFileName(sessionData.session_info)
+            val finalFile = File(destinationFolder, finalFileName)
+
+            // Ensure destination directory exists
+            if (!destinationFolder.exists()) {
+                destinationFolder.mkdirs()
+            }
+
+            // Copy to final location
+            sessionFile.copyTo(finalFile, overwrite = true)
+
+            // Clean up temp file
+            if (sessionFile.delete()) {
+                Log.i(TAG, "Session finalized: ${finalFile.absolutePath}")
+            } else {
+                Log.w(TAG, "Could not delete temp file: ${sessionFile.absolutePath}")
+            }
+
+            return finalFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to finalize session", e)
+            throw SessionFileException("Failed to finalize session: ${e.message}")
+        }
+    }
+
+    /**
+     * Reads session data from a file
+     * @param sessionFile File to read from
+     * @return Parsed session data
+     */
+    fun readSessionData(sessionFile: File): SessionExport {
+        try {
+            if (!sessionFile.exists()) {
+                throw FileNotFoundException("Session file not found: ${sessionFile.absolutePath}")
+            }
+
+            val jsonString = sessionFile.readText()
+            val sessionData = gson.fromJson(jsonString, SessionExport::class.java)
+
+            Log.d(TAG, "Read session data from: ${sessionFile.name}")
+            return sessionData
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read session file: ${sessionFile.name}", e)
+            throw SessionFileException("Failed to read session file: ${e.message}")
+        }
+    }
+
+    // ============================================================================
+    // SESSION RECOVERY AND BROWSING
+    // ============================================================================
+
+    /**
+     * Finds incomplete session files that can be recovered
+     * @return List of recoverable session files
+     */
+    fun findRecoverableSessions(): List<File> {
+        return try {
+            internalStorageDir.listFiles { file ->
+                file.name.startsWith(TEMP_FILE_PREFIX) &&
+                        file.name.endsWith(TEMP_FILE_SUFFIX) &&
+                        file.length() > 0
+            }?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to scan for recoverable sessions", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Scans a directory for completed session files
+     * @param directory Directory to scan (user-selected export folder)
+     * @return List of completed session files found
+     */
+    fun findCompletedSessions(directory: File): List<File> {
+        return try {
+            if (!directory.exists() || !directory.isDirectory) {
+                return emptyList()
+            }
+
+            directory.listFiles { file ->
+                file.name.endsWith(JSON_FILE_EXTENSION) &&
+                        !file.name.contains("_temp") &&
+                        file.length() > 0
+            }?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to scan directory for sessions: ${directory.absolutePath}", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Gets summary information about a session file without full parsing
+     * @param sessionFile File to inspect
+     * @return Basic session info for display in lists
+     */
+    fun getSessionSummary(sessionFile: File): SessionSummary? {
+        return try {
+            val sessionData = readSessionData(sessionFile)
+            SessionSummary(
+                file = sessionFile,
+                participantName = sessionData.session_info.participant_name,
+                participantNumber = sessionData.session_info.participant_number,
+                participantAge = sessionData.session_info.participant_age,
+                sessionStartTime = sessionData.session_info.session_start_time,
+                sessionEndTime = sessionData.session_info.session_end_time,
+                taskCount = sessionData.tasks.size,
+                isCompleted = sessionData.session_info.ended == 1,
+                isDiscarded = sessionData.session_info.discarded == 1,
+                fileSize = sessionFile.length(),
+                lastModified = sessionFile.lastModified()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get session summary: ${sessionFile.name}", e)
+            null
+        }
+    }
+
+    /**
+     * Reads multiple session files and returns summaries
+     * @param sessionFiles List of files to process
+     * @return List of session summaries
+     */
+    fun getSessionSummaries(sessionFiles: List<File>): List<SessionSummary> {
+        return sessionFiles.mapNotNull { file ->
+            getSessionSummary(file)
+        }
+    }
+
+    /**
+     * Checks if a session file represents an incomplete session
+     * @param sessionFile File to check
+     * @return True if session is incomplete (not ended or discarded)
+     */
+    fun isSessionIncomplete(sessionFile: File): Boolean {
+        return try {
+            val sessionData = readSessionData(sessionFile)
+            sessionData.session_info.ended == 0 && sessionData.session_info.discarded == 0
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not determine session status: ${sessionFile.name}", e)
+            false
+        }
+    }
+
+    /**
+     * Deletes a session file (for cleanup or discard operations)
+     * @param sessionFile File to delete
+     */
+    fun deleteSessionFile(sessionFile: File) {
+        try {
+            if (sessionFile.delete()) {
+                Log.i(TAG, "Deleted session file: ${sessionFile.name}")
+            } else {
+                Log.w(TAG, "Could not delete session file: ${sessionFile.name}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting session file: ${sessionFile.name}", e)
+        }
+    }
+
+    // ============================================================================
+    // GENERIC JSON OPERATIONS
+    // ============================================================================
+
+    /**
+     * Reads any JSON file and parses it to specified type
+     * @param file JSON file to read
+     * @param clazz Class to parse JSON into
+     * @return Parsed object of type T
+     */
+    fun <T> readJsonFile(file: File, clazz: Class<T>): T {
+        return try {
+            if (!file.exists()) {
+                throw FileNotFoundException("File not found: ${file.absolutePath}")
+            }
+
+            val jsonString = file.readText()
+            val result = gson.fromJson(jsonString, clazz)
+
+            Log.d(TAG, "Read JSON file: ${file.name}")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read JSON file: ${file.name}", e)
+            throw SessionFileException("Failed to read JSON file: ${e.message}")
+        }
+    }
+
+    /**
+     * Writes any object to JSON file
+     * @param file Target file
+     * @param data Object to serialize
+     */
+    fun writeJsonFile(file: File, data: Any) {
+        try {
+            val jsonString = gson.toJson(data)
+            file.writeText(jsonString)
+
+            Log.d(TAG, "Wrote JSON file: ${file.name}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write JSON file: ${file.name}", e)
+            throw SessionFileException("Failed to write JSON file: ${e.message}")
+        }
+    }
+
+    /**
+     * Reads JSON from assets folder
+     * @param fileName Name of file in assets folder
+     * @param clazz Class to parse JSON into
+     * @return Parsed object of type T
+     */
+    fun <T> readJsonFromAssets(fileName: String, clazz: Class<T>): T {
+        return try {
+            val inputStream = context.assets.open(fileName)
+            val jsonString = inputStream.bufferedReader().use { it.readText() }
+            val result = gson.fromJson(jsonString, clazz)
+
+            Log.d(TAG, "Read JSON from assets: $fileName")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read JSON from assets: $fileName", e)
+            throw SessionFileException("Failed to read JSON from assets: ${e.message}")
+        }
+    }
+
+    // ============================================================================
+    // LEGACY FILE MIGRATION (For future use)
+    // ============================================================================
+
+    /**
+     * Migrates old session files to new format
+     * This method can be extended when file format changes
+     */
+    fun migrateOldSessionFiles(): Int {
+        var migratedCount = 0
+
+        try {
+            // Scan for files that might be in old format
+            val allFiles = context.filesDir.listFiles { file ->
+                file.name.endsWith(".json") && !file.name.contains("_temp")
+            } ?: return 0
+
+            for (file in allFiles) {
+                try {
+                    // Try to read as current format
+                    val sessionData = readSessionData(file)
+
+                    // If successful but missing newer fields, migrate
+                    if (needsMigration(sessionData)) {
+                        val migratedData = performMigration(sessionData)
+                        writeSessionData(file, migratedData)
+                        migratedCount++
+                        Log.i(TAG, "Migrated file: ${file.name}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not migrate file: ${file.name}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during file migration", e)
+        }
+
+        return migratedCount
+    }
+
+    // ============================================================================
+    // FILE SYSTEM UTILITIES
+    // ============================================================================
+
+    /**
+     * Copies a file from one location to another
+     * @param source Source file
+     * @param destination Target file
+     * @param overwrite Whether to overwrite existing files
+     * @return True if copy was successful
+     */
+    fun copyFile(source: File, destination: File, overwrite: Boolean = false): Boolean {
+        return try {
+            if (destination.exists() && !overwrite) {
+                Log.w(TAG, "Destination exists and overwrite=false: ${destination.absolutePath}")
+                return false
+            }
+
+            // Ensure destination directory exists
+            destination.parentFile?.mkdirs()
+
+            source.copyTo(destination, overwrite)
+            Log.d(TAG, "Copied file: ${source.name} -> ${destination.absolutePath}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy file: ${source.name}", e)
+            false
+        }
+    }
+
+    /**
+     * Gets file information for display purposes
+     * @param file File to inspect
+     * @return File information object
+     */
+    fun getFileInfo(file: File): FileInfo? {
+        return try {
+            if (!file.exists()) return null
+
+            FileInfo(
+                name = file.name,
+                path = file.absolutePath,
+                size = file.length(),
+                lastModified = file.lastModified(),
+                isDirectory = file.isDirectory,
+                canRead = file.canRead(),
+                canWrite = file.canWrite()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get file info: ${file.absolutePath}", e)
+            null
+        }
+    }
+
+    // ============================================================================
+    // PRIVATE HELPER METHODS
+    // ============================================================================
+
+    private fun writeSessionData(file: File, sessionData: SessionExport) {
+        val jsonString = gson.toJson(sessionData)
+        file.writeText(jsonString)
+    }
+
+    private fun generateFinalFileName(sessionInfo: SessionInfo): String {
+        val timestamp = Instant.now().atZone(ZoneId.systemDefault())
+        val dateStr = timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"))
+
+        // Sanitize participant name for filename
+        val sanitizedName = sessionInfo.participant_name
+            .replace(Regex("[^a-zA-Z0-9]"), "_")
+            .take(20) // Limit length
+
+        return "${sanitizedName}_${sessionInfo.participant_number}_${dateStr}$JSON_FILE_EXTENSION"
+    }
+
+    private fun needsMigration(sessionData: SessionExport): Boolean {
+        // Add logic here to detect old format versions
+        // For now, assume current format is correct
+        return false
+    }
+
+    private fun performMigration(sessionData: SessionExport): SessionExport {
+        // Add migration logic here when format changes
+        return sessionData
+    }
+
+    // ============================================================================
+    // VALIDATION AND UTILITIES
+    // ============================================================================
+
+    /**
+     * Validates that a folder is writable for session export
+     * @param folder Folder to validate
+     * @return True if folder is writable
+     */
+    fun validateExportFolder(folder: File): Boolean {
+        return try {
+            if (!folder.exists()) {
+                folder.mkdirs()
+            }
+
+            if (!folder.isDirectory) {
+                return false
+            }
+
+            // Test write permissions
+            val testFile = File(folder, "test_write_${System.currentTimeMillis()}.tmp")
+            testFile.writeText("test")
+            val canWrite = testFile.exists() && testFile.readText() == "test"
+            testFile.delete()
+
+            canWrite
+        } catch (e: Exception) {
+            Log.e(TAG, "Folder validation failed: ${folder.absolutePath}", e)
+            false
+        }
+    }
+
+    /**
+     * Gets the current internal storage usage for session files
+     * @return Size in bytes
+     */
+    fun getStorageUsage(): Long {
+        return try {
+            internalStorageDir.listFiles()?.sumOf { it.length() } ?: 0L
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not calculate storage usage", e)
+            0L
+        }
+    }
+}
+
+// ============================================================================
+// DATA CLASSES FOR JSON EXPORT
+// ============================================================================
+
+data class SessionExport(
+    val session_info: SessionInfo,
+    val tasks: List<TaskExport>
+)
+
+data class SessionInfo(
+    val participant_name: String,
+    val participant_number: String,
+    val participant_age: Int,
+    val ended: Int,
+    val discarded: Int,
+    val session_start_time: String,
+    val session_end_time: String?
+)
+
+data class TaskExport(
+    val task_number: String,
+    val task_counter: Int,
+    val task_start_time: String,
+    val task_metrics: TaskMetrics,
+    val asq_responses: AsqResponses,
+    val end_condition: String
+)
+
+data class TaskMetrics(
+    val task_label: String,
+    val successful_stroops: Int,
+    val mean_reaction_time_successful: Double?,
+    val incorrect_stroops: Int,
+    val mean_reaction_time_incorrect: Double?,
+    val mean_reaction_time_overall: Double?,
+    val missed_stroops: Int,
+    val time_on_task: Long,
+    val countdown_duration: Long
+)
+
+data class AsqResponses(
+    val asq_ease: Int,
+    val asq_time: Int
+)
+
+// ============================================================================
+// SUPPORTING DATA CLASSES
+// ============================================================================
+
+/**
+ * Summary information about a session file for display in lists
+ */
+data class SessionSummary(
+    val file: File,
+    val participantName: String,
+    val participantNumber: String,
+    val participantAge: Int,
+    val sessionStartTime: String,
+    val sessionEndTime: String?,
+    val taskCount: Int,
+    val isCompleted: Boolean,
+    val isDiscarded: Boolean,
+    val fileSize: Long,
+    val lastModified: Long
+)
+
+/**
+ * File system information for any file
+ */
+data class FileInfo(
+    val name: String,
+    val path: String,
+    val size: Long,
+    val lastModified: Long,
+    val isDirectory: Boolean,
+    val canRead: Boolean,
+    val canWrite: Boolean
+)
+
+/**
+ * Research configuration structure (matches research_config.json)
+ */
+data class ResearchConfig(
+    val version: String,
+    val stroop_colors: Map<String, String>,
+    val display_colors: Map<String, String>,
+    val text_only_colors: List<String>,
+    val tasks: Map<String, TaskConfig>,
+    val task_lists: Map<String, TaskListConfig>,
+    val timing_defaults: TimingConfig,
+    val asq_questions: Map<String, String>? = null,
+    val asq_scale: AsqScaleConfig? = null
+)
+
+data class TaskConfig(
+    val label: String,
+    val text: String,
+    val timeout_seconds: Int
+)
+
+data class TaskListConfig(
+    val label: String,
+    val task_sequence: String
+)
+
+data class TimingConfig(
+    val stroop_display_duration: Long,
+    val min_interval: Long,
+    val max_interval: Long,
+    val countdown_duration: Long
+)
+
+data class AsqScaleConfig(
+    val min_label: String,
+    val max_label: String,
+    val min_value: Int,
+    val max_value: Int
+)

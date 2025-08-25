@@ -20,7 +20,7 @@ import java.io.Serializable as JavaSerializable
  * No longer handles sending config to Projector apps - that's done via task commands.
  */
 class MasterConfigLoader(private val context: Context) {
-
+/*
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -352,5 +352,5 @@ fun StructureValidationResult.toErrorMessage(): String? {
         is StructureValidationResult.InvalidTasks -> message
         is StructureValidationResult.InvalidTaskSequence -> message
         is StructureValidationResult.InvalidTiming -> message
-    }
+    }*/
 }

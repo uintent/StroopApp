@@ -8,13 +8,11 @@ import java.text.SimpleDateFormat
 import java.util.*
 import android.util.Log
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 import java.io.File
 
 /**
  * Manages research session data and JSON file creation
+ * NOW USES FileManager for all file operations to ensure consistency
  * Handles participant information, task data, and file persistence
  * According to requirements FR-SM-001, FR-SM-002, FR-SM-003, FR-DP-001, FR-DP-002, FR-DP-003
  */
@@ -24,13 +22,11 @@ object SessionManager {
     val currentSession: StateFlow<SessionData?> = _currentSession.asStateFlow()
 
     private lateinit var appContext: Context
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-    }
+    private lateinit var fileManager: FileManager
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        fileManager = FileManager(appContext)
     }
 
     /**
@@ -61,7 +57,7 @@ object SessionManager {
 
         _currentSession.value = sessionData
 
-        // Save initial session data
+        // Save initial session data using FileManager
         saveSessionToFile(sessionData)
 
         Log.d("SessionManager", "Created session: $sessionId for participant: $participantName")
@@ -122,7 +118,7 @@ object SessionManager {
 
                 Log.d("SessionManager", "Updated current session in memory: discarded=${discardedSession.discarded}")
 
-                // Save the updated session with discarded flag
+                // Save the updated session with discarded flag using FileManager
                 saveSessionToFile(discardedSession)
                 Log.d("SessionManager", "Saved current session to file")
 
@@ -149,6 +145,7 @@ object SessionManager {
 
     /**
      * Clean up other incomplete sessions (temporary fix for existing files)
+     * NOW USES FileManager for all file operations
      * @param currentSessionId The session ID to skip (don't modify current session)
      * @param markAsEnded If true, mark as ended=1; if false, mark as discarded=1
      */
@@ -161,19 +158,20 @@ object SessionManager {
             val storageFolder = getStorageFolder()
             Log.d("SessionManager", "Storage folder: ${storageFolder.absolutePath}")
 
-            val files = storageFolder.listFiles { file ->
-                file.extension == "json"
-            } ?: return
-
-            Log.d("SessionManager", "Found ${files.size} JSON files to check")
+            // Use FileManager to find completed sessions in the directory
+            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
+            Log.d("SessionManager", "Found ${sessionFiles.size} session files to check")
 
             var cleanedCount = 0
             var skippedCount = 0
 
-            files.forEachIndexed { index, file ->
+            sessionFiles.forEachIndexed { index, file ->
                 try {
-                    Log.d("SessionManager", "Processing file ${index + 1}/${files.size}: ${file.name}")
-                    val sessionData = json.decodeFromString<SessionData>(file.readText())
+                    Log.d("SessionManager", "Processing file ${index + 1}/${sessionFiles.size}: ${file.name}")
+
+                    // Use FileManager to read session data
+                    val sessionExport = fileManager.readSessionData(file)
+                    val sessionData = convertFromSessionExport(sessionExport) // Helper method to convert
 
                     Log.d("SessionManager", "  Session ID: ${sessionData.sessionId}")
                     Log.d("SessionManager", "  Current ended: ${sessionData.ended}, discarded: ${sessionData.discarded}")
@@ -215,9 +213,9 @@ object SessionManager {
 
                     Log.d("SessionManager", "  Updated session: ended=${cleanedSession.ended}, discarded=${cleanedSession.discarded}")
 
-                    // Save the cleaned session
-                    val jsonString = json.encodeToString(cleanedSession)
-                    file.writeText(jsonString)
+                    // Convert back to SessionExport and save using FileManager
+                    val cleanedSessionExport = convertToSessionExport(cleanedSession)
+                    fileManager.updateSessionFile(file, cleanedSessionExport)
 
                     cleanedCount++
                     val action = if (markAsEnded) "ended" else "discarded"
@@ -229,7 +227,7 @@ object SessionManager {
             }
 
             Log.d("SessionManager", "--- CLEANUP SUMMARY ---")
-            Log.d("SessionManager", "Files processed: ${files.size}")
+            Log.d("SessionManager", "Files processed: ${sessionFiles.size}")
             Log.d("SessionManager", "Sessions cleaned: $cleanedCount")
             Log.d("SessionManager", "Sessions skipped: $skippedCount")
 
@@ -259,7 +257,7 @@ object SessionManager {
         val updatedSession = session.copy(tasks = updatedTasks)
         _currentSession.value = updatedSession
 
-        // Save incrementally for crash protection (FR-SR-001)
+        // Save incrementally for crash protection (FR-SR-001) using FileManager
         saveSessionToFile(updatedSession)
 
         Log.d("SessionManager", "Added task data: ${taskData.taskId} to session: ${session.sessionId}")
@@ -280,7 +278,7 @@ object SessionManager {
             .replace("ü", "ue")
             .replace("ß", "ss")
             .replace("Ä", "Ae")
-            .replace("Ö",  "Oe")
+            .replace("Ö", "Oe")
             .replace("Ü", "Ue")
             .replace(Regex("[^a-zA-Z0-9]"), "_")
 
@@ -288,7 +286,7 @@ object SessionManager {
     }
 
     /**
-     * Save session data to JSON file
+     * Save session data to JSON file using FileManager
      * FR-DP-001, FR-DP-002: JSON file structure and content
      * Updates existing file for the same session instead of creating duplicates
      */
@@ -296,17 +294,17 @@ object SessionManager {
         try {
             val storageFolder = getStorageFolder()
 
-            // First, try to find existing file for this session
+            // First, try to find existing file for this session using FileManager
+            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
             var existingFile: File? = null
-            val files = storageFolder.listFiles { file ->
-                file.extension == "json"
-            }
 
             // Look for existing file with the same session ID
-            files?.forEach { file ->
+            sessionFiles.forEach { file ->
                 try {
-                    val existingSessionData = json.decodeFromString<SessionData>(file.readText())
-                    if (existingSessionData.sessionId == sessionData.sessionId) {
+                    val sessionExport = fileManager.readSessionData(file)
+                    // Compare using participant info since session IDs might differ in export format
+                    if (sessionExport.session_info.participant_name == sessionData.participantName &&
+                        sessionExport.session_info.participant_number == sessionData.participantId) {
                         existingFile = file
                         Log.d("SessionManager", "Found existing file for session ${sessionData.sessionId}: ${file.name}")
                         return@forEach
@@ -316,33 +314,145 @@ object SessionManager {
                 }
             }
 
-            val finalFile = if (existingFile != null) {
-                // Update existing file
+            // Convert SessionData to SessionExport format for FileManager
+            val sessionExport = convertToSessionExport(sessionData)
+
+            if (existingFile != null) {
+                // Update existing file using FileManager
                 Log.d("SessionManager", "Updating existing session file: ${existingFile!!.name}")
-                existingFile!!
+                fileManager.updateSessionFile(existingFile!!, sessionExport)
             } else {
-                // Create new file with proper naming
+                // Create new file using FileManager
+                Log.d("SessionManager", "Creating new session file for session: ${sessionData.sessionId}")
+
+                // Generate unique filename
                 val filename = generateFilename(sessionData)
                 val file = File(storageFolder, filename)
 
-                // Handle duplicate filenames (FR-DP-003.1) only for truly new sessions
-                if (file.exists()) {
+                // Handle duplicate filenames (FR-DP-003.1)
+                val finalFile = if (file.exists()) {
                     generateUniqueFilename(file)
                 } else {
                     file
                 }
+
+                // Use FileManager to write the session data
+                fileManager.writeJsonFile(finalFile, sessionExport)
             }
 
-            // Save the session data
-            val jsonString = json.encodeToString(sessionData)
-            finalFile.writeText(jsonString)
-
-            Log.d("SessionManager", "Saved session ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded}) to: ${finalFile.absolutePath}")
+            Log.d("SessionManager", "Saved session ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded}) via FileManager")
 
         } catch (e: Exception) {
             Log.e("SessionManager", "Failed to save session data", e)
             throw e
         }
+    }
+
+    /**
+     * Convert SessionData to SessionExport format for FileManager compatibility
+     */
+    private fun convertToSessionExport(sessionData: SessionData): SessionExport {
+        return SessionExport(
+            session_info = SessionInfo(
+                participant_name = sessionData.participantName,
+                participant_number = sessionData.participantId,
+                participant_age = sessionData.participantAge,
+                ended = sessionData.ended,
+                discarded = sessionData.discarded,
+                session_start_time = formatTimestamp(sessionData.interviewStartTime),
+                session_end_time = sessionData.interviewEndTime?.let { formatTimestamp(it) }
+            ),
+            tasks = sessionData.tasks.map { taskData ->
+                TaskExport(
+                    task_number = taskData.taskId,
+                    task_counter = 0, // Default counter for single attempts
+                    task_start_time = formatTimestamp(taskData.taskEndTime - taskData.timeRequiredMs),
+                    task_metrics = TaskMetrics(
+                        task_label = taskData.taskLabel,
+                        successful_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateCorrect / 100).toInt(),
+                        mean_reaction_time_successful = if (taskData.stroopErrorRateCorrect > 0) taskData.stroopAverageReactionTime else null,
+                        incorrect_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateIncorrect / 100).toInt(),
+                        mean_reaction_time_incorrect = if (taskData.stroopErrorRateIncorrect > 0) taskData.stroopAverageReactionTime else null,
+                        mean_reaction_time_overall = if (taskData.stroopTotalCount > 0) taskData.stroopAverageReactionTime else null,
+                        missed_stroops = taskData.stroopTotalCount - (taskData.stroopErrorRateCorrect + taskData.stroopErrorRateIncorrect).toInt() / 100 * taskData.stroopTotalCount,
+                        time_on_task = taskData.timeRequiredMs,
+                        countdown_duration = 4000L // Default countdown duration
+                    ),
+                    asq_responses = AsqResponses(
+                        asq_ease = taskData.asqScores["ease"]?.toIntOrNull() ?: 0,
+                        asq_time = taskData.asqScores["time"]?.toIntOrNull() ?: 0
+                    ),
+                    end_condition = taskData.endCondition
+                )
+            }
+        )
+    }
+
+    /**
+     * Convert SessionExport back to SessionData format
+     */
+    private fun convertFromSessionExport(sessionExport: SessionExport): SessionData {
+        return SessionData(
+            sessionId = generateSessionIdFromExport(sessionExport),
+            participantName = sessionExport.session_info.participant_name,
+            participantId = sessionExport.session_info.participant_number,
+            participantAge = sessionExport.session_info.participant_age,
+            carModel = "unknown", // This info might not be in export format, use default
+            interviewStartTime = parseTimestamp(sessionExport.session_info.session_start_time),
+            interviewEndTime = sessionExport.session_info.session_end_time?.let { parseTimestamp(it) },
+            tasks = sessionExport.tasks.map { taskExport ->
+                TaskCompletionData(
+                    taskId = taskExport.task_number,
+                    taskLabel = taskExport.task_metrics.task_label,
+                    timeRequiredMs = taskExport.task_metrics.time_on_task,
+                    endCondition = taskExport.end_condition,
+                    stroopErrorRateCorrect = calculatePercentage(taskExport.task_metrics.successful_stroops, getTotalStroops(taskExport.task_metrics)),
+                    stroopErrorRateIncorrect = calculatePercentage(taskExport.task_metrics.incorrect_stroops, getTotalStroops(taskExport.task_metrics)),
+                    stroopTotalCount = getTotalStroops(taskExport.task_metrics),
+                    stroopAverageReactionTime = taskExport.task_metrics.mean_reaction_time_overall ?: 0.0,
+                    stroopIndividualTimes = emptyList(), // Not available in export format
+                    asqScores = mapOf(
+                        "ease" to taskExport.asq_responses.asq_ease.toString(),
+                        "time" to taskExport.asq_responses.asq_time.toString()
+                    ),
+                    taskEndTime = parseTimestamp(sessionExport.session_info.session_end_time ?: sessionExport.session_info.session_start_time)
+                )
+            },
+            sessionStatus = when {
+                sessionExport.session_info.ended == 1 -> "completed_normally"
+                sessionExport.session_info.discarded == 1 -> "discarded"
+                else -> "in_progress"
+            },
+            ended = sessionExport.session_info.ended,
+            discarded = sessionExport.session_info.discarded
+        )
+    }
+
+    /**
+     * Helper methods for data conversion
+     */
+    private fun formatTimestamp(timestamp: Long): String {
+        return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date(timestamp))
+    }
+
+    private fun parseTimestamp(timestamp: String): Long {
+        return try {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).parse(timestamp)?.time ?: 0L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private fun generateSessionIdFromExport(sessionExport: SessionExport): String {
+        return "session_${sessionExport.session_info.participant_name}_${sessionExport.session_info.participant_number}"
+    }
+
+    private fun getTotalStroops(metrics: TaskMetrics): Int {
+        return metrics.successful_stroops + metrics.incorrect_stroops + metrics.missed_stroops
+    }
+
+    private fun calculatePercentage(count: Int, total: Int): Double {
+        return if (total > 0) (count.toDouble() / total.toDouble()) * 100.0 else 0.0
     }
 
     /**
@@ -389,32 +499,34 @@ object SessionManager {
     }
 
     /**
-     * Check for incomplete sessions on startup
+     * Check for incomplete sessions on startup using FileManager
      * FR-SR-002: Session recovery
      * Only returns sessions that are explicitly neither ended nor discarded (both flags must be exactly 0)
      */
     suspend fun checkForIncompleteSession(): SessionData? {
         try {
             val storageFolder = getStorageFolder()
-            val files = storageFolder.listFiles { file ->
-                file.extension == "json"
-            } ?: return null
+
+            // Use FileManager to find session files
+            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
 
             // Find most recent file that is explicitly not ended and not discarded
-            val activeFiles = files.mapNotNull { file ->
+            val activeFiles = sessionFiles.mapNotNull { file ->
                 try {
-                    val sessionData = json.decodeFromString<SessionData>(file.readText())
-                    // Only consider files where both flags are explicitly 0
-                    if (sessionData.ended == 0 && sessionData.discarded == 0) {
+                    // Check if session is incomplete using FileManager
+                    if (fileManager.isSessionIncomplete(file)) {
+                        val sessionExport = fileManager.readSessionData(file)
+                        val sessionData = convertFromSessionExport(sessionExport)
                         Log.d("SessionManager", "Valid incomplete session found: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
                         Pair(file, sessionData)
                     } else {
+                        val sessionExport = fileManager.readSessionData(file)
                         val reason = when {
-                            sessionData.ended != 0 -> "ended flag = ${sessionData.ended}"
-                            sessionData.discarded != 0 -> "discarded flag = ${sessionData.discarded}"
+                            sessionExport.session_info.ended != 0 -> "ended flag = ${sessionExport.session_info.ended}"
+                            sessionExport.session_info.discarded != 0 -> "discarded flag = ${sessionExport.session_info.discarded}"
                             else -> "unknown reason"
                         }
-                        Log.d("SessionManager", "Ignoring session (${reason}): ${sessionData.sessionId}")
+                        Log.d("SessionManager", "Ignoring session (${reason}): ${sessionExport.session_info.participant_name}")
                         null
                     }
                 } catch (e: Exception) {
@@ -454,6 +566,7 @@ object SessionManager {
 /**
  * Main session data structure
  * FR-DP-002: Required session data fields
+ * NOTE: This is kept for internal SessionManager use, while FileManager uses its own SessionExport format
  */
 @Serializable
 data class SessionData(

@@ -8,6 +8,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.research.master.databinding.ActivityParticipantInfoBinding
 import com.research.master.utils.SessionManager
 import com.research.master.utils.SessionData
+import com.research.master.utils.FileManager
 import com.research.master.network.NetworkManager
 import kotlinx.coroutines.launch
 import android.util.Log
@@ -15,11 +16,12 @@ import android.util.Log
 /**
  * Activity for collecting participant information before starting tasks
  * According to FR-SM-001: Collect name, identifier, age, and car model
- * UPDATED: Removed pre-session options, added session cleanup logic
+ * UPDATED: Now uses FileManager for all file operations including SharedPreferences
  */
 class ParticipantInfoActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityParticipantInfoBinding
+    private lateinit var fileManager: FileManager
     private var isNewSession: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,6 +29,9 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
         binding = ActivityParticipantInfoBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Initialize FileManager
+        fileManager = FileManager(this)
 
         // Set up toolbar with back navigation
         setSupportActionBar(binding.toolbar)
@@ -244,7 +249,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
                 // Store session ID in NetworkManager for task control
                 NetworkManager.setCurrentSessionId(sessionId)
 
-                // Save form data for convenience
+                // Save form data for convenience using FileManager
                 saveFormData(validName, validId, ageText!!)
 
                 // Navigate to task selection
@@ -270,10 +275,10 @@ class ParticipantInfoActivity : AppCompatActivity() {
     private suspend fun savePreviousSessionToFile(previousSession: SessionData) {
         try {
             Log.d("ParticipantInfo", "TODO: Save previous session to JSON file")
-            // TODO: Implement JSON export logic
+            // TODO: Implement JSON export logic using FileManager
             // This should:
-            // 1. Generate filename according to FR-DP-003 format
-            // 2. Export session data to JSON
+            // 1. Use FileManager.finalizeSession() to export session data
+            // 2. Generate filename according to FR-DP-003 format
             // 3. Save to user-configured location
             // 4. Handle file conflicts and errors
 
@@ -303,27 +308,40 @@ class ParticipantInfoActivity : AppCompatActivity() {
         Log.d("ParticipantInfo", "Form cleared completely")
     }
 
+    /**
+     * Save form data for convenience using FileManager
+     * UPDATED: Now uses FileManager instead of direct SharedPreferences
+     */
     private fun saveFormData(name: String, id: String, age: String) {
-        // Save for convenience in case user navigates back
-        getSharedPreferences("participant_prefs", MODE_PRIVATE).edit().apply {
-            putString("last_name", name)
-            putString("last_id", id)
-            putString("last_age", age)
-            apply()
+        try {
+            fileManager.saveParticipantFormData(name, id, age)
+            Log.d("ParticipantInfo", "Form data saved via FileManager")
+        } catch (e: Exception) {
+            Log.e("ParticipantInfo", "Failed to save form data", e)
+            // Don't fail the flow if convenience data save fails
         }
     }
 
+    /**
+     * Load existing convenience data using FileManager
+     * UPDATED: Now uses FileManager instead of direct SharedPreferences
+     */
     private fun loadExistingData() {
         // Only load convenience data if this is NOT a new session
         // and no session data was already loaded from an existing session
         if (!isNewSession && binding.etParticipantName.text.isNullOrEmpty()) {
-            val prefs = getSharedPreferences("participant_prefs", MODE_PRIVATE)
+            try {
+                val formData = fileManager.loadParticipantFormData()
 
-            binding.etParticipantName.setText(prefs.getString("last_name", ""))
-            binding.etParticipantId.setText(prefs.getString("last_id", ""))
-            binding.etParticipantAge.setText(prefs.getString("last_age", ""))
+                binding.etParticipantName.setText(formData.name)
+                binding.etParticipantId.setText(formData.id)
+                binding.etParticipantAge.setText(formData.age)
 
-            Log.d("ParticipantInfo", "Loaded convenience data from preferences")
+                Log.d("ParticipantInfo", "Loaded convenience data via FileManager")
+            } catch (e: Exception) {
+                Log.e("ParticipantInfo", "Failed to load convenience data", e)
+                // Continue without loading data if it fails
+            }
         } else if (isNewSession) {
             Log.d("ParticipantInfo", "New session - NOT loading convenience data, form stays clear")
         }
