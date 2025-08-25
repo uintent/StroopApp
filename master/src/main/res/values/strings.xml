@@ -10,6 +10,7 @@
 
     <!-- Task Info -->
     <string name="task_summary_task_label">Task: %1$s</string>
+    <string name="task_summary_task_iteration_label">Task %1$d (Attempt %2$d)</string>
     <string name="task_summary_unknown_task">Unknown Task</string>
 
     <!-- Metrics Labels -->
@@ -25,6 +26,7 @@
     <string name="task_summary_reaction_time_ms">%.1f ms</string>
     <string name="task_summary_time_seconds">%.1f seconds</string>
     <string name="task_summary_not_available">N/A</string>
+    <string name="task_summary_percentage_format">%.1f%%</string>
 
     <!-- Buttons -->
     <string name="task_summary_btn_continue">Continue</string>
@@ -44,25 +46,23 @@
 
     <!-- Navigation Messages -->
     <string name="task_summary_asq_not_implemented">ASQ Activity not implemented yet - returning to task selection</string>
-    <string name="task_summary_navigating_to_asq">Success -> Navigating to ASQ</string>
-    <string name="task_summary_navigating_to_task_selection">Non-success -> Navigating to task selection</string>
+    <string name="task_summary_navigating_to_asq">Navigating to ASQ</string>
+    <string name="task_summary_navigating_to_task_selection">Navigating to Task Selection</string>
 
     <!-- Error Messages -->
     <string name="task_summary_save_error">Failed to save task data: %1$s</string>
-    <string name="task_summary_no_responses_warning">No stroop responses to calculate metrics from</string>
+    <string name="task_summary_no_responses_warning">No stroop responses recorded</string>
 
     <!-- Debug/Log Messages -->
-    <string name="task_summary_data_saved">Task data saved to SessionManager</string>
+    <string name="task_summary_data_saved">Task data saved successfully</string>
     <string name="task_summary_data_save_failed">Failed to save task data</string>
-
-    <!-- Percentages for SessionManager compatibility -->
-    <string name="task_summary_percentage_format">%.1f%%</string>
 
     <!-- ASQ Activity Strings -->
     <string name="asq_title">After Scenario Questionnaire</string>
     <string name="asq_unknown_task">Unknown Task</string>
     <string name="asq_unknown_task_id">Unknown Task ID</string>
-    <string name="asq_task_label">Task: %1$s</string>
+    <string name="asq_task_label">Task %1$d</string>
+    <string name="asq_task_iteration_label">Task %1$d (Attempt %2$d)</string>
 
     <!-- Instructions -->
     <string name="asq_instructions_title">Instructions</string>
@@ -143,5 +143,106 @@
     <string name="settings_unsaved_changes_message">You have unsaved changes. Do you want to discard them and exit?</string>
     <string name="settings_discard_changes">Discard Changes</string>
     <string name="settings_keep_editing">Keep Editing</string>
+
+    <!-- Participant Info Activity Strings -->
+    <string name="participant_info_title">Participant Information</string>
+
+    <!-- Form Labels and Hints -->
+    <string name="participant_info_name_hint">Enter participant name</string>
+    <string name="participant_info_id_hint">Enter participant identifier</string>
+    <string name="participant_info_age_hint">Enter participant age</string>
+
+    <!-- Buttons -->
+    <string name="participant_info_btn_continue">Continue</string>
+    <string name="participant_info_btn_clear">Clear</string>
+
+    <!-- Clear Confirmation Dialog -->
+    <string name="participant_info_clear_title">Clear Form</string>
+    <string name="participant_info_clear_message">This will clear all participant information. Continue?</string>
+    <string name="participant_info_clear_confirm">Clear</string>
+    <string name="participant_info_clear_cancel">Cancel</string>
+
+    <!-- Validation Error Messages -->
+    <string name="participant_info_name_required">Please enter participant name</string>
+    <string name="participant_info_id_required">Please enter participant identifier</string>
+    <string name="participant_info_id_alphanumeric">Identifier must be alphanumeric only</string>
+    <string name="participant_info_age_required">Please enter participant age</string>
+    <string name="participant_info_age_invalid">Please enter a valid age (1-150)</string>
+    <string name="participant_info_age_not_number">Please enter a valid number</string>
+    <string name="participant_info_car_model_required">Please select a car model</string>
+
+    <!-- Success/Error Messages -->
+    <string name="participant_info_session_save_error">Failed to save participant information: %1$s</string>
+
+    <!-- Car Model Options -->
+    <string name="participant_info_car_old">Old Car Model</string>
+    <string name="participant_info_car_new">New Car Model</string>
+
+    <!-- Color Display Activity Strings -->
+    <string name="color_display_title">Task Control</string>
+    <string name="color_display_unknown_task">Unknown Task</string>
+
+    <!-- Task Info Display -->
+    <string name="color_display_no_description">No description available</string>
+    <string name="color_display_timeout_format">Timeout: %1$ds</string>
+
+    <!-- Status Messages -->
+    <string name="color_display_task_ready">Task ready - Press START to begin</string>
+    <string name="color_display_waiting">Waiting...</string>
+    <string name="color_display_starting_countdown">Starting task... Countdown active</string>
+    <string name="color_display_task_active_waiting">Task active - Waiting for Stroop</string>
+    <string name="color_display_stroop_active">Stroop #%1$d Active - Listening for response</string>
+    <string name="color_display_task_paused">Task paused</string>
+    <string name="color_display_task_completed">Task completed: %1$s</string>
+    <string name="color_display_task_error">Task error: %1$s</string>
+    <string name="color_display_next_stroop_waiting">Task active - Waiting for next Stroop</string>
+    <string name="color_display_interval_period">Interval period</string>
+    <string name="color_display_task_timeout_reached">Task Timeout Reached</string>
+    <string name="color_display_task_ended">Task ended</string>
+    <string name="color_display_timeout_final_response">Task Timeout - Final response window (1 second)</string>
+    <string name="color_display_response_recorded_ending">Response recorded - Task ending</string>
+    <string name="color_display_response_recorded_waiting">Response recorded - Waiting for next Stroop</string>
+    <string name="color_display_task_ending">Task Ending - %1$s</string>
+    <string name="color_display_processing">Processing...</string>
+
+    <!-- Connection and Session Status -->
+    <string name="color_display_not_connected">Not Connected to Projector</string>
+    <string name="color_display_please_reconnect">Please reconnect</string>
+    <string name="color_display_no_session">No Session Available</string>
+    <string name="color_display_restart_participant">Please restart from participant info</string>
+
+    <!-- Response Recording Messages -->
+    <string name="color_display_response_correct">Recorded: Participant correctly named the color</string>
+    <string name="color_display_response_incorrect">Recorded: Participant incorrectly named the color</string>
+    <string name="color_display_response_grace_period">%1$s (during grace period)</string>
+
+    <!-- Task Completion Messages -->
+    <string name="color_display_task_completed_snackbar">Task completed with condition: %1$s</string>
+    <string name="color_display_timeout_snackbar">Task timed out after %1$ds. %2$d Stroops displayed.</string>
+
+    <!-- Error Messages -->
+    <string name="color_display_task_error_snackbar">Task Error: %1$s</string>
+    <string name="color_display_failed_start">Failed to start task. Check connection.</string>
+    <string name="color_display_failed_pause">Failed to pause task.</string>
+    <string name="color_display_failed_resume">Failed to resume task.</string>
+    <string name="color_display_failed_reset">Failed to reset task.</string>
+    <string name="color_display_no_session_found">No session found. Please go back and enter participant information.</string>
+
+    <!-- Button Labels -->
+    <string name="color_display_btn_start">START</string>
+    <string name="color_display_btn_pause">PAUSE</string>
+    <string name="color_display_btn_resume">RESUME</string>
+    <string name="color_display_btn_reset">RESET</string>
+    <string name="color_display_btn_success">SUCCESS</string>
+    <string name="color_display_btn_failed">FAILED</string>
+    <string name="color_display_btn_given_up">GIVEN UP</string>
+    <string name="color_display_btn_correct">CORRECT</string>
+    <string name="color_display_btn_incorrect">INCORRECT</string>
+    <string name="color_display_btn_return">Return to Tasks</string>
+
+    <!-- Debug/Log Messages -->
+    <string name="color_display_log_preparing_summary">Preparing task summary data</string>
+    <string name="color_display_log_total_responses">Total stroop responses: %1$d</string>
+    <string name="color_display_log_time_on_task">Time on task: %1$dms</string>
 
 </resources>

@@ -1,5 +1,3 @@
-// Replace the TaskSummaryActivity.kt file with this fixed version:
-
 package com.research.master
 
 import android.content.Intent
@@ -16,6 +14,7 @@ import kotlinx.coroutines.launch
 
 /**
  * TaskSummaryActivity - Display task metrics and allow revision
+ * UPDATED: Now uses Int task numbers with iteration counter support
  * Receives raw stroop data from ColorDisplayActivity
  * Calculates aggregated metrics and handles FileManager communication
  * Shows revision options and navigates to ASQ or TaskSelection
@@ -25,8 +24,10 @@ class TaskSummaryActivity : AppCompatActivity() {
     private lateinit var binding: ActivityTaskSummaryBinding
     private lateinit var fileManager: FileManager
 
-    // Raw data from ColorDisplayActivity
-    private var taskId: String? = null
+    // Task information from ColorDisplayActivity - UPDATED
+    private var taskNumber: Int = 0               // NEW: Int task number
+    private var taskId: String? = null            // Keep for display purposes
+    private var iterationCounter: Int = 0         // NEW: Iteration counter
     private var taskLabel: String? = null
     private var taskText: String? = null
     private var originalEndCondition: String = ""
@@ -101,12 +102,17 @@ class TaskSummaryActivity : AppCompatActivity() {
 
     /**
      * Extract raw data from ColorDisplayActivity intent
+     * UPDATED: Now extracts taskNumber and iterationCounter
      */
     private fun extractIntentData() {
         Log.d("TaskSummary", "=== EXTRACTING INTENT DATA ===")
 
-        // Basic task info
+        // UPDATED: Extract task number and iteration counter
+        taskNumber = intent.getIntExtra("TASK_NUMBER", 0)
         taskId = intent.getStringExtra("TASK_ID")
+        iterationCounter = intent.getIntExtra("ITERATION_COUNTER", 0)
+
+        // Basic task info
         taskLabel = intent.getStringExtra("TASK_LABEL")
         taskText = intent.getStringExtra("TASK_TEXT")
         originalEndCondition = intent.getStringExtra("END_CONDITION") ?: getString(R.string.task_summary_end_condition_unknown)
@@ -118,7 +124,9 @@ class TaskSummaryActivity : AppCompatActivity() {
         sessionId = intent.getStringExtra("SESSION_ID")
         isIndividualTask = intent.getBooleanExtra("IS_INDIVIDUAL_TASK", true)
 
+        Log.d("TaskSummary", "Task Number: $taskNumber")
         Log.d("TaskSummary", "Task ID: $taskId")
+        Log.d("TaskSummary", "Iteration Counter: $iterationCounter")
         Log.d("TaskSummary", "Task Label: $taskLabel")
         Log.d("TaskSummary", "End Condition: $originalEndCondition")
         Log.d("TaskSummary", "Time on Task: ${timeOnTaskMs}ms")
@@ -225,13 +233,19 @@ class TaskSummaryActivity : AppCompatActivity() {
 
     /**
      * Display task summary with calculated metrics
+     * UPDATED: Shows task number and iteration counter
      */
     private fun displayTaskSummary(metrics: TaskMetrics) {
         Log.d("TaskSummary", "=== DISPLAYING TASK SUMMARY ===")
 
-        // Task header
+        // Task header - UPDATED to show iteration info
         binding.textTaskTitle.text = taskLabel ?: getString(R.string.task_summary_unknown_task)
-        binding.textTaskId.text = getString(R.string.task_summary_task_label, taskId ?: getString(R.string.task_summary_end_condition_unknown))
+        val taskDisplayText = if (iterationCounter > 0) {
+            getString(R.string.task_summary_task_iteration_label, taskNumber, iterationCounter + 1) // +1 for user-friendly display
+        } else {
+            getString(R.string.task_summary_task_label, taskNumber)
+        }
+        binding.textTaskId.text = taskDisplayText
 
         // Metrics display
         binding.textSuccessfulStroops.text = metrics.successfulStroops.toString()
@@ -304,6 +318,7 @@ class TaskSummaryActivity : AppCompatActivity() {
 
     /**
      * Save task data to SessionManager via FileManager
+     * UPDATED: Now uses taskNumber and iterationCounter
      */
     private fun saveTaskData(metrics: TaskMetrics) {
         Log.d("TaskSummary", "=== SAVING TASK DATA ===")
@@ -313,9 +328,10 @@ class TaskSummaryActivity : AppCompatActivity() {
         val correctPercentage = if (totalStroops > 0) (metrics.successfulStroops.toDouble() / totalStroops.toDouble()) * 100.0 else 0.0
         val incorrectPercentage = if (totalStroops > 0) (metrics.incorrectStroops.toDouble() / totalStroops.toDouble()) * 100.0 else 0.0
 
-        // Create TaskCompletionData
+        // Create TaskCompletionData - UPDATED with new fields
         val taskCompletionData = TaskCompletionData(
-            taskId = taskId ?: "unknown",
+            taskNumber = taskNumber,                    // NEW: Int task number
+            iterationCounter = iterationCounter,        // NEW: Iteration counter
             taskLabel = taskLabel ?: "Unknown Task",
             timeRequiredMs = timeOnTaskMs,
             endCondition = currentEndCondition,
@@ -331,6 +347,8 @@ class TaskSummaryActivity : AppCompatActivity() {
         )
 
         Log.d("TaskSummary", "TaskCompletionData created:")
+        Log.d("TaskSummary", "  Task Number: ${taskCompletionData.taskNumber}")
+        Log.d("TaskSummary", "  Iteration Counter: ${taskCompletionData.iterationCounter}")
         Log.d("TaskSummary", "  End condition: ${taskCompletionData.endCondition}")
         Log.d("TaskSummary", "  Correct rate: %.1f%%".format(correctPercentage))
         Log.d("TaskSummary", "  Incorrect rate: %.1f%%".format(incorrectPercentage))
@@ -394,15 +412,18 @@ class TaskSummaryActivity : AppCompatActivity() {
     }
 
     /**
-     * Navigate to ASQ activity (placeholder)
+     * Navigate to ASQ activity
+     * UPDATED: Now passes taskNumber and iterationCounter
      */
     private fun navigateToASQ() {
         Log.d("TaskSummary", "Navigating to ASQActivity")
 
         val intent = Intent(this, ASQActivity::class.java)
 
-        // Pass task information to ASQ activity
-        intent.putExtra("TASK_ID", taskId)
+        // UPDATED: Pass task information to ASQ activity
+        intent.putExtra("TASK_NUMBER", taskNumber)           // NEW: Int task number
+        intent.putExtra("TASK_ID", taskId)                   // Keep String for display
+        intent.putExtra("ITERATION_COUNTER", iterationCounter) // NEW: Iteration counter
         intent.putExtra("TASK_LABEL", taskLabel)
         intent.putExtra("SESSION_ID", sessionId)
         intent.putExtra("IS_INDIVIDUAL_TASK", isIndividualTask)

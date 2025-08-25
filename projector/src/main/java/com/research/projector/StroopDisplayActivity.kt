@@ -13,6 +13,7 @@ import com.research.projector.databinding.ActivityStroopDisplayBinding
 import com.research.projector.models.*
 import com.research.projector.utils.StroopGenerator
 import com.research.projector.viewmodels.*
+import android.util.Log
 
 /**
  * Activity for fullscreen Stroop stimulus display with precise timing.
@@ -164,6 +165,16 @@ class StroopDisplayActivity : AppCompatActivity() {
         // Observe font information
         viewModel.fontInfo.observe(this) { fontInfo ->
             updateFontSizes(fontInfo)
+        }
+
+        viewModel.taskCompletionEvent.observe(this) { event ->
+            event?.let {
+                Log.d("StroopDisplayActivity", "Task completion event received - returning to main screen")
+                viewModel.clearTaskCompletionEvent()
+
+                // Return to main activity
+                finish()
+            }
         }
 
         // Observe task completion with one-time event handling

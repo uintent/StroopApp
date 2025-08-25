@@ -12,7 +12,7 @@ import java.io.File
 
 /**
  * Manages research session data and JSON file creation
- * NOW USES FileManager for all file operations to ensure consistency
+ * UPDATED: Now uses FileManager task iteration system with Int task numbers
  * Handles participant information, task data, and file persistence
  * According to requirements FR-SM-001, FR-SM-002, FR-SM-003, FR-DP-001, FR-DP-002, FR-DP-003
  */
@@ -23,6 +23,7 @@ object SessionManager {
 
     private lateinit var appContext: Context
     private lateinit var fileManager: FileManager
+    private var currentSessionFile: File? = null
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
@@ -31,6 +32,7 @@ object SessionManager {
 
     /**
      * Create new session with participant information
+     * UPDATED: Now creates session file using FileManager
      * FR-SM-001: Record participant details
      * FR-SM-002: Record exact start time
      */
@@ -57,8 +59,9 @@ object SessionManager {
 
         _currentSession.value = sessionData
 
-        // Save initial session data using FileManager
-        saveSessionToFile(sessionData)
+        // Create session file using FileManager
+        val sessionExport = convertToSessionExport(sessionData)
+        currentSessionFile = fileManager.createSessionFile(sessionId, sessionExport)
 
         Log.d("SessionManager", "Created session: $sessionId for participant: $participantName")
         return sessionId
@@ -66,45 +69,60 @@ object SessionManager {
 
     /**
      * End the current session
+     * UPDATED: Uses FileManager for session finalization
      * FR-SM-003: Record exact end time
      * Marks session as ended successfully
-     * Also cleans up any other incomplete sessions
      */
     suspend fun endSession() {
         val session = _currentSession.value ?: return
+        val sessionFile = currentSessionFile ?: return
 
         Log.d("SessionManager", "=== STARTING END SESSION ===")
-        Log.d("SessionManager", "Current session ID: ${session.sessionId}")
 
         val updatedSession = session.copy(
             interviewEndTime = System.currentTimeMillis(),
             sessionStatus = "completed_normally",
-            ended = 1 // Mark as ended successfully
+            ended = 1
         )
 
         _currentSession.value = updatedSession
-        Log.d("SessionManager", "Updated current session in memory: ended=${updatedSession.ended}")
+        val sessionExport = convertToSessionExport(updatedSession)
 
-        saveSessionToFile(updatedSession)
-        Log.d("SessionManager", "Saved current session to file")
+        // UPDATE: Add the missing finalization step
+        try {
+            // Get user's export folder from settings
+            val exportFolderPath = fileManager.getExportFolder()
+            val exportFolder = File(exportFolderPath)
 
-        // Clean up any other incomplete sessions
-        Log.d("SessionManager", "Starting cleanup of other incomplete sessions...")
-        cleanupOtherIncompleteSessions(session.sessionId, markAsEnded = true)
+            // Finalize session - this moves it to the user folder
+            val finalFile = fileManager.finalizeSession(sessionFile, sessionExport, exportFolder)
+
+            // Clear temp file reference since it's now been moved
+            currentSessionFile = null
+
+            Log.d("SessionManager", "Session finalized to: ${finalFile.absolutePath}")
+
+        } catch (e: Exception) {
+            Log.e("SessionManager", "Failed to finalize session to user folder", e)
+            // Fallback: just update the temp file
+            fileManager.updateSessionFile(sessionFile, sessionExport)
+            throw e
+        }
 
         Log.d("SessionManager", "=== END SESSION COMPLETE ===")
-        Log.d("SessionManager", "Ended session: ${session.sessionId}")
     }
 
     /**
      * Clear the current session without saving
+     * UPDATED: Uses FileManager for session cleanup
      * Used when discarding session data
      * Marks session as discarded and saves to file
-     * Also cleans up any other incomplete sessions
      */
     suspend fun clearSession() {
         val session = _currentSession.value
-        if (session != null) {
+        val sessionFile = currentSessionFile
+
+        if (session != null && sessionFile != null) {
             Log.d("SessionManager", "=== STARTING CLEAR SESSION ===")
             Log.d("SessionManager", "Current session ID: ${session.sessionId}")
 
@@ -113,21 +131,18 @@ object SessionManager {
                 val discardedSession = session.copy(
                     discarded = 1,
                     sessionStatus = "discarded"
-                    // Note: ended remains 0 since session was not ended successfully
                 )
 
                 Log.d("SessionManager", "Updated current session in memory: discarded=${discardedSession.discarded}")
 
                 // Save the updated session with discarded flag using FileManager
-                saveSessionToFile(discardedSession)
+                val sessionExport = convertToSessionExport(discardedSession)
+                fileManager.updateSessionFile(sessionFile, sessionExport)
                 Log.d("SessionManager", "Saved current session to file")
-
-                // Clean up any other incomplete sessions
-                Log.d("SessionManager", "Starting cleanup of other incomplete sessions...")
-                cleanupOtherIncompleteSessions(session.sessionId, markAsEnded = false)
 
                 // Clear the current session from memory
                 _currentSession.value = null
+                currentSessionFile = null
 
                 Log.d("SessionManager", "=== CLEAR SESSION COMPLETE ===")
                 Log.d("SessionManager", "Session marked as discarded and saved")
@@ -136,6 +151,7 @@ object SessionManager {
                 Log.e("SessionManager", "Error marking session as discarded", e)
                 // Still clear from memory even if saving fails
                 _currentSession.value = null
+                currentSessionFile = null
                 throw e
             }
         } else {
@@ -144,213 +160,159 @@ object SessionManager {
     }
 
     /**
-     * Clean up other incomplete sessions (temporary fix for existing files)
-     * NOW USES FileManager for all file operations
-     * @param currentSessionId The session ID to skip (don't modify current session)
-     * @param markAsEnded If true, mark as ended=1; if false, mark as discarded=1
-     */
-    private suspend fun cleanupOtherIncompleteSessions(currentSessionId: String, markAsEnded: Boolean) {
-        try {
-            Log.d("SessionManager", "--- CLEANUP START ---")
-            Log.d("SessionManager", "Current session ID to skip: $currentSessionId")
-            Log.d("SessionManager", "Action: ${if (markAsEnded) "mark as ended" else "mark as discarded"}")
-
-            val storageFolder = getStorageFolder()
-            Log.d("SessionManager", "Storage folder: ${storageFolder.absolutePath}")
-
-            // Use FileManager to find completed sessions in the directory
-            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
-            Log.d("SessionManager", "Found ${sessionFiles.size} session files to check")
-
-            var cleanedCount = 0
-            var skippedCount = 0
-
-            sessionFiles.forEachIndexed { index, file ->
-                try {
-                    Log.d("SessionManager", "Processing file ${index + 1}/${sessionFiles.size}: ${file.name}")
-
-                    // Use FileManager to read session data
-                    val sessionExport = fileManager.readSessionData(file)
-                    val sessionData = convertFromSessionExport(sessionExport) // Helper method to convert
-
-                    Log.d("SessionManager", "  Session ID: ${sessionData.sessionId}")
-                    Log.d("SessionManager", "  Current ended: ${sessionData.ended}, discarded: ${sessionData.discarded}")
-
-                    // Skip the current session and already processed sessions
-                    if (sessionData.sessionId == currentSessionId) {
-                        Log.d("SessionManager", "  SKIP: Current session")
-                        skippedCount++
-                        return@forEachIndexed
-                    }
-
-                    if (sessionData.ended != 0) {
-                        Log.d("SessionManager", "  SKIP: Already ended (${sessionData.ended})")
-                        skippedCount++
-                        return@forEachIndexed
-                    }
-
-                    if (sessionData.discarded != 0) {
-                        Log.d("SessionManager", "  SKIP: Already discarded (${sessionData.discarded})")
-                        skippedCount++
-                        return@forEachIndexed
-                    }
-
-                    // This is an incomplete session that needs cleanup
-                    Log.d("SessionManager", "  CLEANUP NEEDED: Session ${sessionData.sessionId}")
-
-                    val cleanedSession = if (markAsEnded) {
-                        sessionData.copy(
-                            ended = 1,
-                            sessionStatus = "completed_automatically_cleanup",
-                            interviewEndTime = System.currentTimeMillis()
-                        )
-                    } else {
-                        sessionData.copy(
-                            discarded = 1,
-                            sessionStatus = "discarded_automatically_cleanup"
-                        )
-                    }
-
-                    Log.d("SessionManager", "  Updated session: ended=${cleanedSession.ended}, discarded=${cleanedSession.discarded}")
-
-                    // Convert back to SessionExport and save using FileManager
-                    val cleanedSessionExport = convertToSessionExport(cleanedSession)
-                    fileManager.updateSessionFile(file, cleanedSessionExport)
-
-                    cleanedCount++
-                    val action = if (markAsEnded) "ended" else "discarded"
-                    Log.d("SessionManager", "  SUCCESS: Marked session ${sessionData.sessionId} as $action and saved to ${file.name}")
-
-                } catch (e: Exception) {
-                    Log.e("SessionManager", "  ERROR: Could not cleanup file ${file.name}: ${e.message}", e)
-                }
-            }
-
-            Log.d("SessionManager", "--- CLEANUP SUMMARY ---")
-            Log.d("SessionManager", "Files processed: ${sessionFiles.size}")
-            Log.d("SessionManager", "Sessions cleaned: $cleanedCount")
-            Log.d("SessionManager", "Sessions skipped: $skippedCount")
-
-            if (cleanedCount > 0) {
-                val action = if (markAsEnded) "ended" else "discarded"
-                Log.d("SessionManager", "Cleanup complete: Marked $cleanedCount incomplete sessions as $action")
-            } else {
-                Log.d("SessionManager", "Cleanup: No other incomplete sessions found")
-            }
-            Log.d("SessionManager", "--- CLEANUP END ---")
-
-        } catch (e: Exception) {
-            Log.e("SessionManager", "Error during cleanup of incomplete sessions", e)
-        }
-    }
-
-    /**
      * Add task completion data to current session
+     * UPDATED: Now uses FileManager task iteration system
      * FR-DP-002: Store task completion data
      */
     suspend fun addTaskData(taskData: TaskCompletionData) {
         val session = _currentSession.value ?: return
+        val sessionFile = currentSessionFile ?: return
 
+        Log.d("SessionManager", "=== ADDING TASK DATA ===")
+        Log.d("SessionManager", "Task: ${taskData.taskNumber} (iteration ${taskData.iterationCounter})")
+
+        // Add task to local session data
         val updatedTasks = session.tasks.toMutableList()
         updatedTasks.add(taskData)
-
         val updatedSession = session.copy(tasks = updatedTasks)
         _currentSession.value = updatedSession
 
-        // Save incrementally for crash protection (FR-SR-001) using FileManager
-        saveSessionToFile(updatedSession)
+        // Convert to TaskExport and add to FileManager
+        val taskExport = convertTaskToExport(taskData)
+        fileManager.addTaskIteration(sessionFile, taskExport)
 
-        Log.d("SessionManager", "Added task data: ${taskData.taskId} to session: ${session.sessionId}")
+        Log.d("SessionManager", "Added task data: ${taskData.taskNumber} to session: ${session.sessionId}")
     }
 
     /**
-     * Generate filename according to FR-DP-003
-     * Format: [CarType][ParticipantName][ParticipantAge][Date][Time].json
+     * Update ASQ data for a specific task iteration
+     * UPDATED: Now uses FileManager task iteration system with taskNumber and iterationCounter
+     * FR-DP-002: Store ASQ responses with task data
      */
-    private fun generateFilename(sessionData: SessionData): String {
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy_HH:mm", Locale.GERMAN)
-        val timestamp = dateFormat.format(Date(sessionData.interviewStartTime))
+    suspend fun updateTaskASQData(taskNumber: Int, iterationCounter: Int, asqData: Map<String, String>) {
+        val session = _currentSession.value ?: throw IllegalStateException("No current session")
+        val sessionFile = currentSessionFile ?: throw IllegalStateException("No current session file")
 
-        // Sanitize participant name (FR-DP-003.1)
-        val sanitizedName = sessionData.participantName
-            .replace("ä", "ae")
-            .replace("ö", "oe")
-            .replace("ü", "ue")
-            .replace("ß", "ss")
-            .replace("Ä", "Ae")
-            .replace("Ö", "Oe")
-            .replace("Ü", "Ue")
-            .replace(Regex("[^a-zA-Z0-9]"), "_")
+        Log.d("SessionManager", "=== UPDATING TASK ASQ DATA ===")
+        Log.d("SessionManager", "Task Number: $taskNumber, Iteration: $iterationCounter")
+        Log.d("SessionManager", "ASQ Data: $asqData")
 
-        return "${sessionData.carModel}_${sanitizedName}${sessionData.participantAge}_${timestamp}.json"
+        // Update local session data
+        val tasks = session.tasks.toMutableList()
+        val taskIndex = tasks.indexOfLast {
+            it.taskNumber == taskNumber && it.iterationCounter == iterationCounter
+        }
+
+        if (taskIndex == -1) {
+            Log.e("SessionManager", "Task $taskNumber (iteration $iterationCounter) not found in session")
+            throw IllegalArgumentException("Task $taskNumber (iteration $iterationCounter) not found in current session")
+        }
+
+        // Update the task with ASQ scores
+        val updatedTask = tasks[taskIndex].copy(asqScores = asqData)
+        tasks[taskIndex] = updatedTask
+
+        // Update the session with modified task list
+        val updatedSession = session.copy(tasks = tasks)
+        _currentSession.value = updatedSession
+
+        // Get current task export and update with ASQ data
+        val currentTaskExport = fileManager.getLatestTaskIteration(sessionFile, taskNumber)
+            ?: throw IllegalStateException("Task iteration not found in FileManager")
+
+        val updatedTaskExport = currentTaskExport.copy(
+            asq_responses = AsqResponses(
+                asq_ease = asqData["ease"]?.toIntOrNull() ?: 0,
+                asq_time = asqData["time"]?.toIntOrNull() ?: 0
+            )
+        )
+
+        // Update the specific iteration using FileManager
+        fileManager.updateTaskIteration(sessionFile, taskNumber, iterationCounter, updatedTaskExport)
+
+        Log.d("SessionManager", "Task ${taskNumber} (iteration ${iterationCounter}) updated with ASQ data: $asqData")
+        Log.d("SessionManager", "=== TASK ASQ UPDATE COMPLETE ===")
     }
 
     /**
-     * Save session data to JSON file using FileManager
-     * FR-DP-001, FR-DP-002: JSON file structure and content
-     * Updates existing file for the same session instead of creating duplicates
+     * Get the next iteration counter for a task
+     * NEW: Uses FileManager to determine iteration count
      */
-    private suspend fun saveSessionToFile(sessionData: SessionData) {
+    suspend fun getNextIterationCounter(taskNumber: Int): Int {
+        val sessionFile = currentSessionFile ?: return 0
+        return fileManager.getNextIterationCounter(sessionFile, taskNumber)
+    }
+
+    /**
+     * Get task iteration statistics
+     * NEW: Uses FileManager for iteration analysis
+     */
+    suspend fun getTaskIterationStats(taskNumber: Int): TaskIterationStats? {
+        val sessionFile = currentSessionFile ?: return null
+        return fileManager.getTaskIterationStats(sessionFile, taskNumber)
+    }
+
+    /**
+     * Check for incomplete sessions on startup using FileManager
+     * UPDATED: Uses FileManager's session recovery system
+     * FR-SR-002: Session recovery
+     */
+    suspend fun checkForIncompleteSession(): SessionData? {
         try {
-            val storageFolder = getStorageFolder()
+            // Use FileManager to find recoverable sessions
+            val recoverableSessions = fileManager.findRecoverableSessions()
 
-            // First, try to find existing file for this session using FileManager
-            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
-            var existingFile: File? = null
-
-            // Look for existing file with the same session ID
-            sessionFiles.forEach { file ->
-                try {
-                    val sessionExport = fileManager.readSessionData(file)
-                    // Compare using participant info since session IDs might differ in export format
-                    if (sessionExport.session_info.participant_name == sessionData.participantName &&
-                        sessionExport.session_info.participant_number == sessionData.participantId) {
-                        existingFile = file
-                        Log.d("SessionManager", "Found existing file for session ${sessionData.sessionId}: ${file.name}")
-                        return@forEach
-                    }
-                } catch (e: Exception) {
-                    Log.w("SessionManager", "Could not parse file ${file.name} while looking for existing session: ${e.message}")
-                }
+            if (recoverableSessions.isEmpty()) {
+                Log.d("SessionManager", "No recoverable sessions found")
+                return null
             }
 
-            // Convert SessionData to SessionExport format for FileManager
-            val sessionExport = convertToSessionExport(sessionData)
+            // Get the most recent recoverable session
+            val mostRecentFile = recoverableSessions.maxByOrNull { it.lastModified() }
+            if (mostRecentFile != null) {
+                val sessionExport = fileManager.readSessionData(mostRecentFile)
 
-            if (existingFile != null) {
-                // Update existing file using FileManager
-                Log.d("SessionManager", "Updating existing session file: ${existingFile!!.name}")
-                fileManager.updateSessionFile(existingFile!!, sessionExport)
-            } else {
-                // Create new file using FileManager
-                Log.d("SessionManager", "Creating new session file for session: ${sessionData.sessionId}")
-
-                // Generate unique filename
-                val filename = generateFilename(sessionData)
-                val file = File(storageFolder, filename)
-
-                // Handle duplicate filenames (FR-DP-003.1)
-                val finalFile = if (file.exists()) {
-                    generateUniqueFilename(file)
-                } else {
-                    file
+                // Check if session is actually incomplete
+                if (fileManager.isSessionIncomplete(mostRecentFile)) {
+                    currentSessionFile = mostRecentFile
+                    val sessionData = convertFromSessionExport(sessionExport)
+                    Log.d("SessionManager", "Found incomplete session: ${sessionData.sessionId}")
+                    return sessionData
                 }
-
-                // Use FileManager to write the session data
-                fileManager.writeJsonFile(finalFile, sessionExport)
             }
-
-            Log.d("SessionManager", "Saved session ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded}) via FileManager")
 
         } catch (e: Exception) {
-            Log.e("SessionManager", "Failed to save session data", e)
-            throw e
+            Log.e("SessionManager", "Error checking for incomplete session", e)
         }
+
+        return null
+    }
+
+    /**
+     * Resume incomplete session
+     * UPDATED: Sets current session file
+     */
+    suspend fun resumeSession(sessionData: SessionData) {
+        _currentSession.value = sessionData
+
+        // Try to find the session file
+        val recoverableSessions = fileManager.findRecoverableSessions()
+        currentSessionFile = recoverableSessions.find { file ->
+            try {
+                val sessionExport = fileManager.readSessionData(file)
+                sessionExport.session_info.participant_name == sessionData.participantName &&
+                        sessionExport.session_info.participant_number == sessionData.participantId
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        Log.d("SessionManager", "Resumed session: ${sessionData.sessionId}")
     }
 
     /**
      * Convert SessionData to SessionExport format for FileManager compatibility
-     * UPDATED: Now includes car_model in export
+     * UPDATED: Now includes iteration counter in task conversion
      */
     private fun convertToSessionExport(sessionData: SessionData): SessionExport {
         return SessionExport(
@@ -358,40 +320,47 @@ object SessionManager {
                 participant_name = sessionData.participantName,
                 participant_number = sessionData.participantId,
                 participant_age = sessionData.participantAge,
-                car_model = sessionData.carModel,  // ✅ ADDED: Preserve car model
+                car_model = sessionData.carModel,
                 ended = sessionData.ended,
                 discarded = sessionData.discarded,
                 session_start_time = formatTimestamp(sessionData.interviewStartTime),
                 session_end_time = sessionData.interviewEndTime?.let { formatTimestamp(it) }
             ),
-            tasks = sessionData.tasks.map { taskData ->
-                TaskExport(
-                    task_number = taskData.taskId,
-                    task_counter = 0,
-                    task_start_time = formatTimestamp(taskData.taskEndTime - taskData.timeRequiredMs),
-                    task_metrics = TaskMetrics(
-                        task_label = taskData.taskLabel,
-                        successful_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateCorrect / 100).toInt(),
-                        mean_reaction_time_successful = if (taskData.stroopErrorRateCorrect > 0) taskData.stroopAverageReactionTime else null,
-                        incorrect_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateIncorrect / 100).toInt(),
-                        mean_reaction_time_incorrect = if (taskData.stroopErrorRateIncorrect > 0) taskData.stroopAverageReactionTime else null,
-                        mean_reaction_time_overall = if (taskData.stroopTotalCount > 0) taskData.stroopAverageReactionTime else null,
-                        missed_stroops = taskData.stroopTotalCount - (taskData.stroopErrorRateCorrect + taskData.stroopErrorRateIncorrect).toInt() / 100 * taskData.stroopTotalCount,
-                        time_on_task = taskData.timeRequiredMs,
-                        countdown_duration = 4000L
-                    ),
-                    asq_responses = AsqResponses(
-                        asq_ease = taskData.asqScores["ease"]?.toIntOrNull() ?: 0,
-                        asq_time = taskData.asqScores["time"]?.toIntOrNull() ?: 0
-                    ),
-                    end_condition = taskData.endCondition
-                )
-            }
+            tasks = sessionData.tasks.map { convertTaskToExport(it) }
+        )
+    }
+
+    /**
+     * Convert TaskCompletionData to TaskExport
+     * UPDATED: Now includes iteration counter and uses Int task numbers
+     */
+    private fun convertTaskToExport(taskData: TaskCompletionData): TaskExport {
+        return TaskExport(
+            task_number = taskData.taskNumber, // Now Int instead of String
+            iteration_counter = taskData.iterationCounter, // NEW: iteration support
+            task_start_time = formatTimestamp(taskData.taskEndTime - taskData.timeRequiredMs),
+            task_metrics = TaskMetrics(
+                task_label = taskData.taskLabel,
+                successful_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateCorrect / 100).toInt(),
+                mean_reaction_time_successful = if (taskData.stroopErrorRateCorrect > 0) taskData.stroopAverageReactionTime else null,
+                incorrect_stroops = (taskData.stroopTotalCount * taskData.stroopErrorRateIncorrect / 100).toInt(),
+                mean_reaction_time_incorrect = if (taskData.stroopErrorRateIncorrect > 0) taskData.stroopAverageReactionTime else null,
+                mean_reaction_time_overall = if (taskData.stroopTotalCount > 0) taskData.stroopAverageReactionTime else null,
+                missed_stroops = taskData.stroopTotalCount - (taskData.stroopErrorRateCorrect + taskData.stroopErrorRateIncorrect).toInt() / 100 * taskData.stroopTotalCount,
+                time_on_task = taskData.timeRequiredMs,
+                countdown_duration = 4000L
+            ),
+            asq_responses = AsqResponses(
+                asq_ease = taskData.asqScores["ease"]?.toIntOrNull() ?: 0,
+                asq_time = taskData.asqScores["time"]?.toIntOrNull() ?: 0
+            ),
+            end_condition = taskData.endCondition
         )
     }
 
     /**
      * Convert SessionExport back to SessionData format
+     * UPDATED: Now handles iteration counter in task conversion
      */
     private fun convertFromSessionExport(sessionExport: SessionExport): SessionData {
         return SessionData(
@@ -399,12 +368,13 @@ object SessionManager {
             participantName = sessionExport.session_info.participant_name,
             participantId = sessionExport.session_info.participant_number,
             participantAge = sessionExport.session_info.participant_age,
-            carModel = sessionExport.session_info.car_model,  // ✅ FIXED: Read actual car model
+            carModel = sessionExport.session_info.car_model,
             interviewStartTime = parseTimestamp(sessionExport.session_info.session_start_time),
             interviewEndTime = sessionExport.session_info.session_end_time?.let { parseTimestamp(it) },
             tasks = sessionExport.tasks.map { taskExport ->
                 TaskCompletionData(
-                    taskId = taskExport.task_number,
+                    taskNumber = taskExport.task_number, // Now Int instead of String
+                    iterationCounter = taskExport.iteration_counter, // NEW: iteration support
                     taskLabel = taskExport.task_metrics.task_label,
                     timeRequiredMs = taskExport.task_metrics.time_on_task,
                     endCondition = taskExport.end_condition,
@@ -458,40 +428,6 @@ object SessionManager {
     }
 
     /**
-     * Handle duplicate filenames by appending numbers
-     */
-    private fun generateUniqueFilename(originalFile: File): File {
-        val nameWithoutExt = originalFile.nameWithoutExtension
-        val extension = originalFile.extension
-        val parent = originalFile.parent
-
-        var counter = 1
-        var newFile: File
-
-        do {
-            val newName = "${nameWithoutExt}_${counter.toString().padStart(3, '0')}.${extension}"
-            newFile = File(parent, newName)
-            counter++
-        } while (newFile.exists() && counter < 1000)
-
-        return newFile
-    }
-
-    /**
-     * Get storage folder from settings or use default
-     * FR-TM-019: User-selected storage folder
-     */
-    private fun getStorageFolder(): File {
-        // TODO: Get from settings when implemented
-        // For now, use app's external files directory
-        val defaultFolder = File(appContext.getExternalFilesDir(null), "research_data")
-        if (!defaultFolder.exists()) {
-            defaultFolder.mkdirs()
-        }
-        return defaultFolder
-    }
-
-    /**
      * Generate unique session ID
      */
     private fun generateSessionId(): String {
@@ -499,115 +435,12 @@ object SessionManager {
         val random = (1000..9999).random()
         return "session_${timestamp}_${random}"
     }
-
-    /**
-     * Check for incomplete sessions on startup using FileManager
-     * FR-SR-002: Session recovery
-     * Only returns sessions that are explicitly neither ended nor discarded (both flags must be exactly 0)
-     */
-    suspend fun checkForIncompleteSession(): SessionData? {
-        try {
-            val storageFolder = getStorageFolder()
-
-            // Use FileManager to find session files
-            val sessionFiles = fileManager.findCompletedSessions(storageFolder)
-
-            // Find most recent file that is explicitly not ended and not discarded
-            val activeFiles = sessionFiles.mapNotNull { file ->
-                try {
-                    // Check if session is incomplete using FileManager
-                    if (fileManager.isSessionIncomplete(file)) {
-                        val sessionExport = fileManager.readSessionData(file)
-                        val sessionData = convertFromSessionExport(sessionExport)
-                        Log.d("SessionManager", "Valid incomplete session found: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
-                        Pair(file, sessionData)
-                    } else {
-                        val sessionExport = fileManager.readSessionData(file)
-                        val reason = when {
-                            sessionExport.session_info.ended != 0 -> "ended flag = ${sessionExport.session_info.ended}"
-                            sessionExport.session_info.discarded != 0 -> "discarded flag = ${sessionExport.session_info.discarded}"
-                            else -> "unknown reason"
-                        }
-                        Log.d("SessionManager", "Ignoring session (${reason}): ${sessionExport.session_info.participant_name}")
-                        null
-                    }
-                } catch (e: Exception) {
-                    Log.w("SessionManager", "Could not parse session file ${file.name}: ${e.message}")
-                    null
-                }
-            }
-
-            // Find most recent active session
-            val mostRecentActiveSession = activeFiles
-                .maxByOrNull { it.first.lastModified() }
-                ?.second
-
-            if (mostRecentActiveSession != null) {
-                Log.d("SessionManager", "Found incomplete session: ${mostRecentActiveSession.sessionId}")
-                return mostRecentActiveSession
-            } else {
-                Log.d("SessionManager", "No incomplete sessions found")
-            }
-
-        } catch (e: Exception) {
-            Log.e("SessionManager", "Error checking for incomplete session", e)
-        }
-
-        return null
-    }
-
-    /**
-     * Resume incomplete session
-     */
-    suspend fun resumeSession(sessionData: SessionData) {
-        _currentSession.value = sessionData
-        Log.d("SessionManager", "Resumed session: ${sessionData.sessionId}")
-    }
-
-    /**
-     * Update ASQ data for a specific task
-     * FR-DP-002: Store ASQ responses with task data
-     * Uses FileManager to persist changes to JSON file
-     */
-    suspend fun updateTaskASQData(taskId: String, asqData: Map<String, String>) {
-        val session = _currentSession.value ?: throw IllegalStateException("No current session")
-
-        Log.d("SessionManager", "=== UPDATING TASK ASQ DATA ===")
-        Log.d("SessionManager", "Task ID: $taskId")
-        Log.d("SessionManager", "ASQ Data: $asqData")
-
-        // Find the task to update
-        val tasks = session.tasks.toMutableList()
-        val taskIndex = tasks.indexOfLast { it.taskId == taskId }
-
-        if (taskIndex == -1) {
-            Log.e("SessionManager", "Task with ID $taskId not found in session")
-            throw IllegalArgumentException("Task with ID $taskId not found in current session")
-        }
-
-        // Update the task with ASQ scores
-        val updatedTask = tasks[taskIndex].copy(asqScores = asqData)
-        tasks[taskIndex] = updatedTask
-
-        // Update the session with modified task list
-        val updatedSession = session.copy(tasks = tasks)
-        _currentSession.value = updatedSession
-
-        Log.d("SessionManager", "Task ${updatedTask.taskId} updated with ASQ data: $asqData")
-
-        // Persist to file using FileManager
-        saveSessionToFile(updatedSession)
-
-        Log.d("SessionManager", "ASQ data persisted to file via FileManager")
-        Log.d("SessionManager", "=== TASK ASQ UPDATE COMPLETE ===")
-    }
-
 }
 
 /**
  * Main session data structure
+ * UPDATED: Tasks now use Int task numbers with iteration counters
  * FR-DP-002: Required session data fields
- * NOTE: This is kept for internal SessionManager use, while FileManager uses its own SessionExport format
  */
 @Serializable
 data class SessionData(
@@ -626,19 +459,21 @@ data class SessionData(
 
 /**
  * Task completion data structure
+ * UPDATED: Now uses Int taskNumber with iteration counter support
  * FR-DP-002: Required task data fields
  */
 @Serializable
 data class TaskCompletionData(
-    val taskId: String,
+    val taskNumber: Int,                    // CHANGED: Now Int instead of String
+    val iterationCounter: Int = 0,          // NEW: Support for multiple task attempts
     val taskLabel: String,
-    val timeRequiredMs: Long, // Time from countdown end to task end
-    val endCondition: String, // "Failed", "Success", "Partial Success", "Timed Out"
-    val stroopErrorRateCorrect: Double, // Percentage correct
-    val stroopErrorRateIncorrect: Double, // Percentage incorrect
+    val timeRequiredMs: Long,               // Time from countdown end to task end
+    val endCondition: String,               // "Failed", "Success", "Partial Success", "Timed Out"
+    val stroopErrorRateCorrect: Double,     // Percentage correct
+    val stroopErrorRateIncorrect: Double,   // Percentage incorrect
     val stroopTotalCount: Int,
-    val stroopAverageReactionTime: Double, // milliseconds
+    val stroopAverageReactionTime: Double,  // milliseconds
     val stroopIndividualTimes: List<Double>, // milliseconds
-    val asqScores: Map<String, String>, // ASQ question ID to response ("NA" if not applicable)
+    val asqScores: Map<String, String>,     // ASQ question ID to response ("0" if not answered)
     val taskEndTime: Long
 )

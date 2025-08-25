@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 
 /**
  * ASQActivity - After Scenario Questionnaire
+ * UPDATED: Now uses Int task numbers with iteration counter support
  * Displays two 7-point Likert scale questions for successful tasks
  * Updates existing task data in SessionManager with ASQ responses
  * Navigates to TaskSelectionActivity after completion
@@ -23,8 +24,10 @@ class ASQActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAsqBinding
     private lateinit var fileManager: FileManager
 
-    // Task information passed from TaskSummaryActivity
-    private var taskId: String? = null
+    // Task information passed from TaskSummaryActivity - UPDATED
+    private var taskNumber: Int = 0               // NEW: Int task number
+    private var taskId: String? = null            // Keep for display purposes
+    private var iterationCounter: Int = 0         // NEW: Iteration counter
     private var taskLabel: String? = null
     private var sessionId: String? = null
     private var isIndividualTask: Boolean = true
@@ -63,16 +66,23 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Extract task data from TaskSummaryActivity intent
+     * UPDATED: Now extracts taskNumber and iterationCounter
      */
     private fun extractIntentData() {
         Log.d("ASQActivity", "=== EXTRACTING INTENT DATA ===")
 
+        // UPDATED: Extract task number and iteration counter
+        taskNumber = intent.getIntExtra("TASK_NUMBER", 0)
         taskId = intent.getStringExtra("TASK_ID")
+        iterationCounter = intent.getIntExtra("ITERATION_COUNTER", 0)
+
         taskLabel = intent.getStringExtra("TASK_LABEL")
         sessionId = intent.getStringExtra("SESSION_ID")
         isIndividualTask = intent.getBooleanExtra("IS_INDIVIDUAL_TASK", true)
 
+        Log.d("ASQActivity", "Task Number: $taskNumber")
         Log.d("ASQActivity", "Task ID: $taskId")
+        Log.d("ASQActivity", "Iteration Counter: $iterationCounter")
         Log.d("ASQActivity", "Task Label: $taskLabel")
         Log.d("ASQActivity", "Session ID: $sessionId")
         Log.d("ASQActivity", "Individual Task: $isIndividualTask")
@@ -82,13 +92,20 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Set up the UI with task information and questions
+     * UPDATED: Shows iteration information
      */
     private fun setupUI() {
         Log.d("ASQActivity", "=== SETTING UP UI ===")
 
-        // Display task information
+        // Display task information - UPDATED to show iteration info
         binding.textTaskTitle.text = taskLabel ?: getString(R.string.asq_unknown_task)
-        binding.textTaskId.text = getString(R.string.asq_task_label, taskId ?: getString(R.string.asq_unknown_task_id))
+
+        val taskDisplayText = if (iterationCounter > 0) {
+            getString(R.string.asq_task_iteration_label, taskNumber, iterationCounter + 1) // +1 for user-friendly display
+        } else {
+            getString(R.string.asq_task_label, taskNumber)
+        }
+        binding.textTaskId.text = taskDisplayText
 
         // Set up radio group listeners
         setupRadioGroupListener(binding.radioGroupEase) { selectedValue ->
@@ -143,8 +160,6 @@ class ASQActivity : AppCompatActivity() {
         }
     }
 
-
-
     /**
      * Set up button listeners
      */
@@ -162,21 +177,24 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Save ASQ responses to SessionManager and continue
+     * UPDATED: Now uses taskNumber and iterationCounter
      */
     private fun saveASQDataAndContinue() {
         Log.d("ASQActivity", "=== SAVING ASQ DATA ===")
+        Log.d("ASQActivity", "Task Number: $taskNumber")
+        Log.d("ASQActivity", "Iteration Counter: $iterationCounter")
         Log.d("ASQActivity", "Ease response: $asqEaseResponse")
         Log.d("ASQActivity", "Time response: $asqTimeResponse")
 
         lifecycleScope.launch {
             try {
-                // Update the task with ASQ data using SessionManager
+                // UPDATED: Update the task with ASQ data using taskNumber and iterationCounter
                 val asqData = mapOf(
                     "ease" to asqEaseResponse.toString(),
                     "time" to asqTimeResponse.toString()
                 )
 
-                SessionManager.updateTaskASQData(taskId ?: "", asqData)
+                SessionManager.updateTaskASQData(taskNumber, iterationCounter, asqData)
 
                 Log.d("ASQActivity", "ASQ data saved successfully")
 

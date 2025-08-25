@@ -1091,11 +1091,8 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         Log.d("StroopDisplay", "Master controlled: $masterControlled")
         Log.d("StroopDisplay", "Master initiated: $masterInitiated")
 
-        // ✅ SIMPLIFIED LOGIC: Check timeout BEFORE marking as complete
         val wasTimedOut = taskExecution.hasTimedOut()
         Log.d("StroopDisplay", "Task timed out: $wasTimedOut")
-        Log.d("StroopDisplay", "Elapsed time: ${taskExecution.getElapsedTime()}ms")
-        Log.d("StroopDisplay", "Timeout duration: ${taskExecution.timeoutDuration}ms")
 
         currentJob?.cancel()
         isTaskRunning = false
@@ -1111,36 +1108,37 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         _taskExecutionState.value = completedExecution
 
-        // ✅ SIMPLIFIED LOGIC: Only two scenarios for Projector
+        // FIX: Always trigger completion event, regardless of how task ended
+        _taskCompletionEvent.value = TaskCompletionEvent(completedExecution)
+
         if (masterControlled && !masterInitiated) {
+            // Master-controlled task that timed out (not manually ended)
             Log.d("StroopDisplay", "Master controlled task - sending notification")
 
             viewModelScope.launch {
                 try {
                     if (wasTimedOut) {
-                        Log.d("StroopDisplay", "⏰ Task timed out - notifying Master")
+                        Log.d("StroopDisplay", "Task timed out - notifying Master")
                         sendTaskTimeoutToMaster(completedExecution)
                     } else {
-                        Log.d("StroopDisplay", "❌ ERROR: Projector task completed without timeout or Master command")
-                        Log.d("StroopDisplay", "This should never happen - sending timeout anyway")
+                        Log.d("StroopDisplay", "Task completed without timeout - notifying Master")
                         sendTaskTimeoutToMaster(completedExecution)
                     }
-                    Log.d("StroopDisplay", "✅ Master notification sent successfully")
                 } catch (e: Exception) {
-                    Log.e("StroopDisplay", "❌ Error sending notification to Master", e)
+                    Log.e("StroopDisplay", "Error sending notification to Master", e)
                 } finally {
-                    Log.d("StroopDisplay", "Resetting Master control state")
                     masterControlled = false
                     currentTaskId = null
                 }
             }
         } else {
-            Log.d("StroopDisplay", "Not sending notification - masterControlled=$masterControlled, masterInitiated=$masterInitiated")
+            // Master-initiated ending OR manual task
+            Log.d("StroopDisplay", "Task ended by Master command or manual - no notification needed")
             masterControlled = false
             currentTaskId = null
         }
 
-        _taskCompletionEvent.value = TaskCompletionEvent(completedExecution)
+        Log.d("StroopDisplay", "=== TASK COMPLETION HANDLED ===")
     }
 
     /**

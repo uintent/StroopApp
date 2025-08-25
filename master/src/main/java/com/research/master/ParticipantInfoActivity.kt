@@ -35,7 +35,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
         // Set up toolbar with back navigation
         setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = "Participant Information"
+        supportActionBar?.title = getString(R.string.participant_info_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         // Initialize SessionManager
@@ -125,12 +125,12 @@ class ParticipantInfoActivity : AppCompatActivity() {
      */
     private fun showClearConfirmation() {
         androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Clear Form")
-            .setMessage("This will clear all participant information. Continue?")
-            .setPositiveButton("Clear") { _, _ ->
+            .setTitle(getString(R.string.participant_info_clear_title))
+            .setMessage(getString(R.string.participant_info_clear_message))
+            .setPositiveButton(getString(R.string.participant_info_clear_confirm)) { _, _ ->
                 clearForm()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.participant_info_clear_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -156,36 +156,36 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
         // Validate participant name
         if (name.isNullOrEmpty()) {
-            binding.layoutParticipantName.error = "Please enter participant name"
+            binding.layoutParticipantName.error = getString(R.string.participant_info_name_required)
             hasError = true
         }
 
         // Validate participant ID (alphanumeric)
         if (id.isNullOrEmpty()) {
-            binding.layoutParticipantId.error = "Please enter participant identifier"
+            binding.layoutParticipantId.error = getString(R.string.participant_info_id_required)
             hasError = true
         } else if (!id.matches(Regex("^[a-zA-Z0-9]+$"))) {
-            binding.layoutParticipantId.error = "Identifier must be alphanumeric only"
+            binding.layoutParticipantId.error = getString(R.string.participant_info_id_alphanumeric)
             hasError = true
         }
 
         // Validate age
         val age = if (ageText.isNullOrEmpty()) {
-            binding.layoutParticipantAge.error = "Please enter participant age"
+            binding.layoutParticipantAge.error = getString(R.string.participant_info_age_required)
             hasError = true
             null
         } else {
             try {
                 val ageValue = ageText.toInt()
                 if (ageValue < 1 || ageValue > 150) {
-                    binding.layoutParticipantAge.error = "Please enter a valid age (1-150)"
+                    binding.layoutParticipantAge.error = getString(R.string.participant_info_age_invalid)
                     hasError = true
                     null
                 } else {
                     ageValue
                 }
             } catch (e: NumberFormatException) {
-                binding.layoutParticipantAge.error = "Please enter a valid number"
+                binding.layoutParticipantAge.error = getString(R.string.participant_info_age_not_number)
                 hasError = true
                 null
             }
@@ -193,7 +193,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
         // Validate car model selection
         if (carModel == null) {
-            Snackbar.make(binding.root, "Please select a car model", Snackbar.LENGTH_LONG).show()
+            Snackbar.make(binding.root, getString(R.string.participant_info_car_model_required), Snackbar.LENGTH_LONG).show()
             hasError = true
         }
 
@@ -260,7 +260,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
                 Log.e("ParticipantInfo", "Failed to create/update session", e)
                 Snackbar.make(
                     binding.root,
-                    "Failed to save participant information: ${e.message}",
+                    getString(R.string.participant_info_session_save_error, e.message),
                     Snackbar.LENGTH_LONG
                 ).show()
             }

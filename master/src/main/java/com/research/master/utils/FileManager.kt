@@ -19,11 +19,14 @@ import com.research.shared.models.*
 import kotlinx.serialization.json.*
 
 /**
- * Centralized file management for StroopApp.
+ * Centralized file management for StroopApp with task iteration support.
  * All file operations should go through this class to ensure consistency.
  *
+ * ENHANCED: Now supports task iterations - multiple attempts of the same task
+ * are stored as separate entries with incrementing iteration_counter values.
+ *
  * Responsibilities:
- * - Session JSON file creation and updates
+ * - Session JSON file creation and updates with iteration support
  * - Configuration file reading (assets and external)
  * - SharedPreferences operations
  * - File naming conventions and validation
@@ -31,6 +34,7 @@ import kotlinx.serialization.json.*
  * - Session recovery from temp files
  * - Migration to user-selected folders
  * - External storage management
+ * - Task iteration tracking and management
  */
 
 /**
@@ -130,6 +134,218 @@ class FileManager(private val context: Context) {
             externalConfigDir.mkdirs()
         }
     }
+
+    // ============================================================================
+    // TASK ITERATION MANAGEMENT (NEW)
+    // ============================================================================
+
+    /**
+     * Get the next iteration counter for a specific task in a session
+     * @param sessionFile Current session file
+     * @param taskNumber Task number to get next iteration for
+     * @return Next iteration counter (0 for first attempt, 1 for second, etc.)
+     */
+    fun getNextIterationCounter(sessionFile: File, taskNumber: Int): Int {
+        return try {
+            if (!sessionFile.exists()) {
+                Log.d(TAG, "Session file doesn't exist yet, returning iteration 0")
+                return 0
+            }
+
+            val sessionData = readSessionData(sessionFile)
+
+            // Find all existing iterations of this task
+            val existingIterations = sessionData.tasks.filter { it.task_number == taskNumber }
+
+            if (existingIterations.isEmpty()) {
+                Log.d(TAG, "No existing iterations for task $taskNumber, returning 0")
+                0
+            } else {
+                // Find the highest iteration counter and add 1
+                val maxCounter = existingIterations.maxOfOrNull { it.iteration_counter } ?: -1
+                val nextCounter = maxCounter + 1
+                Log.d(TAG, "Task $taskNumber has ${existingIterations.size} existing iterations, next counter: $nextCounter")
+                nextCounter
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting next iteration counter for task $taskNumber", e)
+            // Fallback to 0 if we can't determine the count
+            0
+        }
+    }
+
+    /**
+     * Add a new task iteration to the session
+     * @param sessionFile Session file to update
+     * @param taskExport New task iteration data
+     */
+    fun addTaskIteration(sessionFile: File, taskExport: TaskExport) {
+        try {
+            val sessionData = if (sessionFile.exists()) {
+                readSessionData(sessionFile)
+            } else {
+                // Create new session structure if file doesn't exist
+                createEmptySessionData()
+            }
+
+            // Add new task iteration to the list
+            val updatedTasks = sessionData.tasks + taskExport
+            val updatedSession = sessionData.copy(tasks = updatedTasks)
+
+            // Write back to file
+            updateSessionFile(sessionFile, updatedSession)
+
+            Log.d(TAG, "Added task iteration: ${taskExport.task_number} (iteration ${taskExport.iteration_counter})")
+            Log.d(TAG, "Total task entries in session: ${updatedTasks.size}")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add task iteration", e)
+            throw SessionFileException("Failed to add task iteration: ${e.message}")
+        }
+    }
+
+    /**
+     * Update an existing task iteration (for ASQ responses or result revisions)
+     * @param sessionFile Session file to update
+     * @param taskNumber Task number to update
+     * @param iterationCounter Specific iteration to update
+     * @param updatedTaskExport Updated task data
+     */
+    fun updateTaskIteration(
+        sessionFile: File,
+        taskNumber: Int,
+        iterationCounter: Int,
+        updatedTaskExport: TaskExport
+    ) {
+        try {
+            val sessionData = readSessionData(sessionFile)
+
+            // Find and replace the specific iteration
+            val updatedTasks = sessionData.tasks.map { task ->
+                if (task.task_number == taskNumber && task.iteration_counter == iterationCounter) {
+                    updatedTaskExport
+                } else {
+                    task
+                }
+            }
+
+            val updatedSession = sessionData.copy(tasks = updatedTasks)
+            updateSessionFile(sessionFile, updatedSession)
+
+            Log.d(TAG, "Updated task iteration: $taskNumber (iteration $iterationCounter)")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update task iteration", e)
+            throw SessionFileException("Failed to update task iteration: ${e.message}")
+        }
+    }
+
+    /**
+     * Get all iterations of a specific task
+     * @param sessionFile Session file to read from
+     * @param taskNumber Task number to get iterations for
+     * @return List of all iterations for this task, ordered by iteration_counter
+     */
+    fun getTaskIterations(sessionFile: File, taskNumber: Int): List<TaskExport> {
+        return try {
+            val sessionData = readSessionData(sessionFile)
+            sessionData.tasks
+                .filter { it.task_number == taskNumber }
+                .sortedBy { it.iteration_counter }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get task iterations for $taskNumber", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Get the latest (highest iteration counter) attempt for a specific task
+     * @param sessionFile Session file to read from
+     * @param taskNumber Task number to get latest iteration for
+     * @return Latest task iteration, or null if task hasn't been attempted
+     */
+    fun getLatestTaskIteration(sessionFile: File, taskNumber: Int): TaskExport? {
+        return try {
+            getTaskIterations(sessionFile, taskNumber).maxByOrNull { it.iteration_counter }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get latest task iteration for $taskNumber", e)
+            null
+        }
+    }
+
+    /**
+     * Remove all iterations of a specific task (for complete task removal)
+     * @param sessionFile Session file to update
+     * @param taskNumber Task number to remove all iterations for
+     */
+    fun removeAllTaskIterations(sessionFile: File, taskNumber: Int) {
+        try {
+            val sessionData = readSessionData(sessionFile)
+
+            // Filter out all iterations of this task
+            val updatedTasks = sessionData.tasks.filter { it.task_number != taskNumber }
+            val updatedSession = sessionData.copy(tasks = updatedTasks)
+
+            updateSessionFile(sessionFile, updatedSession)
+
+            Log.d(TAG, "Removed all iterations for task: $taskNumber")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove task iterations for $taskNumber", e)
+            throw SessionFileException("Failed to remove task iterations: ${e.message}")
+        }
+    }
+
+    /**
+     * Get iteration statistics for a task
+     * @param sessionFile Session file to analyze
+     * @param taskNumber Task number to analyze
+     * @return Iteration statistics
+     */
+    fun getTaskIterationStats(sessionFile: File, taskNumber: Int): TaskIterationStats {
+        return try {
+            val iterations = getTaskIterations(sessionFile, taskNumber)
+
+            TaskIterationStats(
+                taskNumber = taskNumber,
+                totalIterations = iterations.size,
+                successfulIterations = iterations.count { it.end_condition == "Success" },
+                failedIterations = iterations.count { it.end_condition == "Failed" },
+                timedOutIterations = iterations.count { it.end_condition == "Timed Out" },
+                givenUpIterations = iterations.count { it.end_condition == "Given up" },
+                latestIteration = iterations.maxByOrNull { it.iteration_counter }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get iteration stats for $taskNumber", e)
+            TaskIterationStats(taskNumber, 0, 0, 0, 0, 0, null)
+        }
+    }
+
+    /**
+     * Create empty session data structure
+     */
+    private fun createEmptySessionData(): SessionExport {
+        val currentTime = Instant.now().atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ISO_INSTANT)
+
+        return SessionExport(
+            session_info = SessionInfo(
+                participant_name = "",
+                participant_number = "",
+                participant_age = 0,
+                car_model = "",
+                ended = 0,
+                discarded = 0,
+                session_start_time = currentTime,
+                session_end_time = null
+            ),
+            tasks = emptyList()
+        )
+    }
+
+    // ============================================================================
+    // SETTINGS MANAGEMENT
+    // ============================================================================
 
     /**
      * Get the current export folder path
@@ -607,18 +823,32 @@ class FileManager(private val context: Context) {
         try {
             // Update with final data
             writeSessionData(sessionFile, sessionData)
+            Log.d(TAG, "Updated session file with final data: ${sessionFile.absolutePath}")
 
             // Generate final filename
             val finalFileName = generateFinalFileName(sessionData.session_info)
             val finalFile = File(destinationFolder, finalFileName)
+            Log.d(TAG, "Target final file: ${finalFile.absolutePath}")
 
             // Ensure destination directory exists
             if (!destinationFolder.exists()) {
-                destinationFolder.mkdirs()
+                val created = destinationFolder.mkdirs()
+                Log.d(TAG, "Destination directory created: $created at ${destinationFolder.absolutePath}")
+            } else {
+                Log.d(TAG, "Destination directory already exists: ${destinationFolder.absolutePath}")
             }
+
+            // Check source file exists
+            Log.d(TAG, "Source file exists: ${sessionFile.exists()}, size: ${sessionFile.length()}")
 
             // Copy to final location
             sessionFile.copyTo(finalFile, overwrite = true)
+            Log.d(TAG, "File copied successfully")
+
+            // Verify final file
+            Log.d(TAG, "Final file exists: ${finalFile.exists()}, size: ${finalFile.length()}")
+            Log.d(TAG, "Final file path: ${finalFile.absolutePath}")
+            Log.d(TAG, "Final file parent exists: ${finalFile.parentFile?.exists()}")
 
             // Clean up temp file
             if (sessionFile.delete()) {
@@ -926,42 +1156,6 @@ class FileManager(private val context: Context) {
         }
     }
 
-    // ============================================================================
-    // PRIVATE HELPER METHODS
-    // ============================================================================
-
-    private fun writeSessionData(file: File, sessionData: SessionExport) {
-        val jsonString = gson.toJson(sessionData)
-        file.writeText(jsonString)
-    }
-
-    private fun generateFinalFileName(sessionInfo: SessionInfo): String {
-        val timestamp = Instant.now().atZone(ZoneId.systemDefault())
-        val dateStr = timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"))
-
-        // Sanitize participant name for filename
-        val sanitizedName = sessionInfo.participant_name
-            .replace(Regex("[^a-zA-Z0-9]"), "_")
-            .take(20) // Limit length
-
-        return "${sanitizedName}_${sessionInfo.participant_number}_${dateStr}$JSON_FILE_EXTENSION"
-    }
-
-    private fun needsMigration(sessionData: SessionExport): Boolean {
-        // Add logic here to detect old format versions
-        // For now, assume current format is correct
-        return false
-    }
-
-    private fun performMigration(sessionData: SessionExport): SessionExport {
-        // Add migration logic here when format changes
-        return sessionData
-    }
-
-    // ============================================================================
-    // VALIDATION AND UTILITIES
-    // ============================================================================
-
     /**
      * Validates that a folder is writable for session export
      * @param folder Folder to validate
@@ -1002,37 +1196,82 @@ class FileManager(private val context: Context) {
             0L
         }
     }
+
+    // ============================================================================
+    // PRIVATE HELPER METHODS
+    // ============================================================================
+
+    private fun writeSessionData(file: File, sessionData: SessionExport) {
+        val jsonString = gson.toJson(sessionData)
+        file.writeText(jsonString)
+    }
+
+    private fun generateFinalFileName(sessionInfo: SessionInfo): String {
+        val timestamp = Instant.now().atZone(ZoneId.systemDefault())
+        val dateStr = timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"))
+
+        // Sanitize participant name for filename
+        val sanitizedName = sessionInfo.participant_name
+            .replace(Regex("[^a-zA-Z0-9]"), "_")
+            .take(20) // Limit length
+
+        return "${sanitizedName}_${sessionInfo.participant_number}_${dateStr}$JSON_FILE_EXTENSION"
+    }
+
+    private fun needsMigration(sessionData: SessionExport): Boolean {
+        // Add logic here to detect old format versions
+        // For now, assume current format is correct
+        return false
+    }
+
+    private fun performMigration(sessionData: SessionExport): SessionExport {
+        // Add migration logic here when format changes
+        return sessionData
+    }
 }
 
 // ============================================================================
-// DATA CLASSES FOR JSON EXPORT
+// DATA CLASSES FOR JSON EXPORT (UPDATED WITH ITERATION SUPPORT)
 // ============================================================================
 
+/**
+ * Main session export structure
+ */
 data class SessionExport(
     val session_info: SessionInfo,
-    val tasks: List<TaskExport>
+    val tasks: List<TaskExport>  // Each iteration is a separate TaskExport entry
 )
 
+/**
+ * Session metadata
+ */
 data class SessionInfo(
     val participant_name: String,
     val participant_number: String,
     val participant_age: Int,
-    val car_model: String,  // ✅ ADDED: "old" or "new"
-    val ended: Int,
-    val discarded: Int,
+    val car_model: String,  // "old" or "new"
+    val ended: Int,         // 0 = not ended, 1 = ended
+    val discarded: Int,     // 0 = not discarded, 1 = discarded
     val session_start_time: String,
     val session_end_time: String?
 )
 
+/**
+ * Individual task iteration export
+ * UPDATED: Now includes iteration_counter for tracking multiple attempts
+ */
 data class TaskExport(
-    val task_number: String,
-    val task_counter: Int,
+    val task_number: Int,           // Task number as integer (e.g., 1, 2, 3)
+    val iteration_counter: Int,     // 0 for first attempt, 1 for second, etc.
     val task_start_time: String,
     val task_metrics: TaskMetrics,
     val asq_responses: AsqResponses,
-    val end_condition: String
+    val end_condition: String       // "Success", "Failed", "Timed Out", "Given up"
 )
 
+/**
+ * Task performance metrics for each iteration
+ */
 data class TaskMetrics(
     val task_label: String,
     val successful_stroops: Int,
@@ -1041,13 +1280,16 @@ data class TaskMetrics(
     val mean_reaction_time_incorrect: Double?,
     val mean_reaction_time_overall: Double?,
     val missed_stroops: Int,
-    val time_on_task: Long,
-    val countdown_duration: Long
+    val time_on_task: Long,         // Time in milliseconds
+    val countdown_duration: Long    // Countdown duration in milliseconds
 )
 
+/**
+ * After Scenario Questionnaire responses
+ */
 data class AsqResponses(
-    val asq_ease: Int,
-    val asq_time: Int
+    val asq_ease: Int,  // 1-7 scale, 0 = unanswered
+    val asq_time: Int   // 1-7 scale, 0 = unanswered
 )
 
 // ============================================================================
@@ -1064,12 +1306,43 @@ data class SessionSummary(
     val participantAge: Int,
     val sessionStartTime: String,
     val sessionEndTime: String?,
-    val taskCount: Int,
+    val taskCount: Int,              // Total number of task iterations
     val isCompleted: Boolean,
     val isDiscarded: Boolean,
     val fileSize: Long,
     val lastModified: Long
 )
+
+/**
+ * Statistics about task iterations (NEW)
+ */
+data class TaskIterationStats(
+    val taskNumber: Int,
+    val totalIterations: Int,
+    val successfulIterations: Int,
+    val failedIterations: Int,
+    val timedOutIterations: Int,
+    val givenUpIterations: Int,
+    val latestIteration: TaskExport?
+) {
+    /**
+     * Get success rate as percentage
+     */
+    fun getSuccessRate(): Double {
+        return if (totalIterations > 0) {
+            (successfulIterations.toDouble() / totalIterations) * 100.0
+        } else {
+            0.0
+        }
+    }
+
+    /**
+     * Get summary string for display
+     */
+    fun getSummary(): String {
+        return "Task $taskNumber: $totalIterations attempts, $successfulIterations successful (${String.format("%.1f", getSuccessRate())}%)"
+    }
+}
 
 /**
  * File system information for any file

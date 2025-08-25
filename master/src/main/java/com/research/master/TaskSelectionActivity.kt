@@ -21,6 +21,7 @@ import android.util.Log
 
 /**
  * Activity for selecting individual tasks or task lists
+ * UPDATED: Now converts String task IDs to Int for FileManager compatibility
  * Displays tasks and task lists loaded from configuration file
  */
 class TaskSelectionActivity : AppCompatActivity() {
@@ -149,13 +150,28 @@ class TaskSelectionActivity : AppCompatActivity() {
 
     /**
      * Handle individual task selection - go directly to Task Control Screen
+     * UPDATED: Converts String taskId to Int for FileManager compatibility
      */
     private fun onIndividualTaskSelected(taskId: String, taskConfig: TaskConfig) {
         Log.d("TaskSelection", "Individual task selected: $taskId - ${taskConfig.label}")
 
-        // Navigate to Task Control Screen (ColorDisplayActivity for now)
+        // Convert String taskId to Int for FileManager compatibility
+        val taskNumber = try {
+            taskId.toInt()
+        } catch (e: NumberFormatException) {
+            Log.e("TaskSelection", "Invalid task ID format: $taskId, expected integer")
+            Snackbar.make(
+                binding.root,
+                "Invalid task ID format: $taskId. Task IDs must be integers.",
+                Snackbar.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        // Navigate to Task Control Screen (ColorDisplayActivity)
         val intent = Intent(this, ColorDisplayActivity::class.java).apply {
-            putExtra("TASK_ID", taskId)
+            putExtra("TASK_NUMBER", taskNumber)  // CHANGED: Now passes Int instead of String
+            putExtra("TASK_ID", taskId)         // Keep String version for display purposes
             putExtra("TASK_LABEL", taskConfig.label)
             putExtra("TASK_TEXT", taskConfig.text)
             putExtra("TASK_TIMEOUT", taskConfig.timeoutSeconds)
@@ -215,6 +231,7 @@ class TaskSelectionActivity : AppCompatActivity() {
 
     /**
      * Adapter for individual tasks
+     * UPDATED: Now shows task number validation
      */
     private class TasksAdapter(
         private val onTaskClick: (String, TaskConfig) -> Unit
@@ -255,6 +272,22 @@ class TaskSelectionActivity : AppCompatActivity() {
                 textTitle.text = "Task $taskId: ${taskConfig.label}"
                 textDescription.text = taskConfig.text
                 textTimeout.text = "Timeout: ${taskConfig.timeoutSeconds}s"
+
+                // Visual indicator if task ID is not a valid integer
+                val isValidInteger = try {
+                    taskId.toInt()
+                    true
+                } catch (e: NumberFormatException) {
+                    false
+                }
+
+                if (!isValidInteger) {
+                    textTitle.text = "Task $taskId: ${taskConfig.label} ⚠️ (Invalid ID)"
+                    cardView.strokeWidth = 3
+                    cardView.strokeColor = itemView.context.getColor(android.R.color.holo_red_light)
+                } else {
+                    cardView.strokeWidth = 0
+                }
 
                 cardView.setOnClickListener {
                     onClick(taskId, taskConfig)
