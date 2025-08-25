@@ -94,7 +94,25 @@
                 android:value=".TaskSelectionActivity" />
         </activity>
 
+        <activity
+            android:name=".TaskSummaryActivity"
+            android:label="Task Summary"
+            android:parentActivityName=".ColorDisplayActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.StroopApp.NoActionBar"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".ColorDisplayActivity" />
+        </activity>
+
         <!-- Future activities to be added:
+
+        <activity
+            android:name=".ASQActivity"
+            android:label="Post-Task Questionnaire"
+            android:parentActivityName=".TaskSummaryActivity"
+            android:theme="@style/Theme.StroopApp.NoActionBar" />
 
         <activity
             android:name=".TaskListManagementActivity"

@@ -2,4 +2,59 @@
 <resources>
     <string name="app_name">StroopApp Master</string>
     <string name="appbar_scrolling_view_behavior" translatable="false">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
+
+    <!-- Task Summary Activity Strings -->
+    <string name="task_summary_title">Task Summary</string>
+    <string name="task_summary_task_metrics">Task Metrics</string>
+    <string name="task_summary_final_rating">Final Rating</string>
+
+    <!-- Task Info -->
+    <string name="task_summary_task_label">Task: %1$s</string>
+    <string name="task_summary_unknown_task">Unknown Task</string>
+
+    <!-- Metrics Labels -->
+    <string name="task_summary_successful_stroops">Successful Stroops:</string>
+    <string name="task_summary_mean_rt_correct">Mean RT (Correct): %1$s</string>
+    <string name="task_summary_incorrect_stroops">Incorrect Stroops:</string>
+    <string name="task_summary_mean_rt_incorrect">Mean RT (Incorrect): %1$s</string>
+    <string name="task_summary_mean_rt_overall">Mean RT (Overall): %1$s</string>
+    <string name="task_summary_missed_stroops">Missed Stroops:</string>
+    <string name="task_summary_time_on_task">Time on Task:</string>
+
+    <!-- Value Formats -->
+    <string name="task_summary_reaction_time_ms">%.1f ms</string>
+    <string name="task_summary_time_seconds">%.1f seconds</string>
+    <string name="task_summary_not_available">N/A</string>
+
+    <!-- Buttons -->
+    <string name="task_summary_btn_continue">Continue</string>
+    <string name="task_summary_btn_revise_result">Revise Result</string>
+
+    <!-- Revision Dialog -->
+    <string name="task_summary_revise_title">Revise Task Result</string>
+    <string name="task_summary_revise_cancel">Cancel</string>
+    <string name="task_summary_result_changed">Result changed to: %1$s</string>
+
+    <!-- End Conditions -->
+    <string name="task_summary_end_condition_success">Success</string>
+    <string name="task_summary_end_condition_failed">Failed</string>
+    <string name="task_summary_end_condition_given_up">Given up</string>
+    <string name="task_summary_end_condition_timed_out">Timed Out</string>
+    <string name="task_summary_end_condition_unknown">Unknown</string>
+
+    <!-- Navigation Messages -->
+    <string name="task_summary_asq_not_implemented">ASQ Activity not implemented yet - returning to task selection</string>
+    <string name="task_summary_navigating_to_asq">Success -> Navigating to ASQ</string>
+    <string name="task_summary_navigating_to_task_selection">Non-success -> Navigating to task selection</string>
+
+    <!-- Error Messages -->
+    <string name="task_summary_save_error">Failed to save task data: %1$s</string>
+    <string name="task_summary_no_responses_warning">No stroop responses to calculate metrics from</string>
+
+    <!-- Debug/Log Messages -->
+    <string name="task_summary_data_saved">Task data saved to SessionManager</string>
+    <string name="task_summary_data_save_failed">Failed to save task data</string>
+
+    <!-- Percentages for SessionManager compatibility -->
+    <string name="task_summary_percentage_format">%.1f%%</string>
 </resources>

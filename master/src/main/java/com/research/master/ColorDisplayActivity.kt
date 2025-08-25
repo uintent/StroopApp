@@ -1,5 +1,6 @@
 package com.research.master
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
@@ -10,6 +11,10 @@ import com.research.master.databinding.ActivityColorDisplayBinding
 import com.research.master.network.NetworkManager
 import com.research.master.network.TaskControlNetworkManager
 import com.research.master.network.TaskState
+import com.research.master.utils.SessionManager
+import com.research.master.utils.TaskCompletionData
+import com.research.master.utils.FileManager
+import com.research.master.utils.ConfigLoadResult
 import com.research.shared.network.StroopDisplayMessage
 import com.research.shared.network.StroopHiddenMessage
 import com.research.shared.network.HeartbeatMessage
@@ -27,14 +32,15 @@ import androidx.core.content.ContextCompat
 /**
  * Task Control Screen - displays task information and provides controls for task execution
  * Shows current Stroop word from Projector and allows moderator to control task flow
- * ENHANCED: Added timeout handling with proper UI state management and TaskControlManager sync
- * FIXED: Enhanced message matching with multiple fallback approaches for TaskTimeoutMessage
+ * ENHANCED: Complete data collection system for task metrics and timing
+ * Collects individual stroop responses in memory, aggregates when task ends
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityColorDisplayBinding
     private val networkClient by lazy { NetworkManager.getNetworkClient(this) }
     private lateinit var taskControlManager: TaskControlNetworkManager
+    private lateinit var fileManager: FileManager
 
     // Task information from intent
     private var taskId: String? = null
@@ -48,19 +54,44 @@ class ColorDisplayActivity : AppCompatActivity() {
     private var currentSessionId: String? = null
     private var isStroopActive = false
     private var responseButtonsActive = false
-    private var isTaskTimedOut = false  // Track timeout state
+    private var isTaskTimedOut = false
+
+    // 🎯 NEW: Data collection system
+    private val stroopResponses = mutableListOf<StroopResponse>()
+    private var activityOpenTime: Long = 0
+    private var taskActualStartTime: Long = 0 // After countdown ends
+    private var countdownDuration: Long = 4000L // Default fallback, will be loaded from config
+    private var currentStroopStartTime: Long = 0
+    private var currentStroopIndex: Int = 0
+
+    /**
+     * Data structure for individual stroop responses (in-memory only)
+     */
+    data class StroopResponse(
+        val stroopIndex: Int,
+        val word: String,
+        val correctAnswer: String,
+        val response: String?, // "CORRECT", "INCORRECT", or null if missed
+        val reactionTimeMs: Long,
+        val startTime: Long,
+        val responseTime: Long? // When response was recorded, null if missed
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Record when activity opened
+        activityOpenTime = System.currentTimeMillis()
+
         binding = ActivityColorDisplayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Initialize task control manager
+        // Initialize FileManager and task control manager
+        fileManager = FileManager(this)
         taskControlManager = TaskControlNetworkManager(networkClient)
 
-        // 🎯 QUICK FIX: Debug imports immediately
-        debugImports()
+        // Load countdown duration from config EARLY
+        loadCountdownFromConfig()
 
         // Get task information from intent
         extractTaskInfo()
@@ -91,27 +122,36 @@ class ColorDisplayActivity : AppCompatActivity() {
 
         // Set initial state
         showTaskReady()
+
+        Log.d("TaskControl", "Activity opened at: $activityOpenTime, countdown duration: ${countdownDuration}ms")
     }
 
-    // 🎯 QUICK FIX: Debug import availability
-    private fun debugImports() {
-        Log.d("TaskControl", "=== IMPORT DEBUG ===")
-        try {
-            val timeoutClass = TaskTimeoutMessage::class.java
-            Log.d("TaskControl", "✅ TaskTimeoutMessage class: ${timeoutClass.name}")
-            Log.d("TaskControl", "✅ Package: ${timeoutClass.packageName}")
-            Log.d("TaskControl", "✅ Constructors: ${timeoutClass.constructors.size}")
-
-            // Check MessageType enum
+    /**
+     * Load countdown duration from configuration using FileManager
+     * Now loads synchronously to ensure value is available immediately
+     */
+    private fun loadCountdownFromConfig() {
+        lifecycleScope.launch {
             try {
-                val messageTypeClass = MessageType::class.java
-                Log.d("TaskControl", "✅ MessageType enum: ${messageTypeClass.name}")
-                Log.d("TaskControl", "✅ TASK_TIMEOUT exists: ${MessageType.TASK_TIMEOUT}")
+                when (val result = fileManager.loadConfiguration()) {
+                    is ConfigLoadResult.Success -> {
+                        // Get countdown duration from config (in seconds) and convert to milliseconds
+                        val configCountdown = result.config.countdownDuration * 1000L
+
+                        // Update the class variable
+                        countdownDuration = configCountdown
+
+                        Log.d("TaskControl", "Countdown duration loaded from config: ${countdownDuration}ms (${result.config.countdownDuration}s)")
+                    }
+                    is ConfigLoadResult.Error -> {
+                        // Keep default fallback if config loading fails
+                        Log.w("TaskControl", "Config loading failed: ${fileManager.getErrorMessage(result.error)}, using default countdown duration: ${countdownDuration}ms")
+                    }
+                }
             } catch (e: Exception) {
-                Log.e("TaskControl", "❌ MessageType enum problem!", e)
+                // Keep default fallback on any error
+                Log.e("TaskControl", "Error loading countdown duration from config, using default: ${countdownDuration}ms", e)
             }
-        } catch (e: Exception) {
-            Log.e("TaskControl", "❌ TaskTimeoutMessage import problem!", e)
         }
     }
 
@@ -141,7 +181,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Task completion buttons
         binding.btnTaskSuccess.setOnClickListener { completeTask("Success") }
         binding.btnTaskFailed.setOnClickListener { completeTask("Failed") }
-        binding.btnTaskGivenUp.setOnClickListener { completeTask("Partial Success") }
+        binding.btnTaskGivenUp.setOnClickListener { completeTask("Given up") }
 
         // Response recording buttons
         binding.btnResponseCorrect.setOnClickListener { recordParticipantResponse(true) }
@@ -161,7 +201,10 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun observeTaskState() {
         lifecycleScope.launch {
             taskControlManager.currentTaskState.collectLatest { taskState ->
-                taskState?.let { updateButtonStates(it) }
+                taskState?.let {
+                    updateButtonStates(it)
+                    handleTaskStateForDataCollection(it)
+                }
             }
         }
 
@@ -171,6 +214,28 @@ class ColorDisplayActivity : AppCompatActivity() {
                     Snackbar.make(binding.root, "Task Error: $it", Snackbar.LENGTH_LONG).show()
                     taskControlManager.clearError()
                 }
+            }
+        }
+    }
+
+    /**
+     * Handle task state changes for data collection
+     */
+    private fun handleTaskStateForDataCollection(taskState: TaskState) {
+        when (taskState) {
+            is TaskState.Active -> {
+                // Task has started (countdown finished)
+                if (taskActualStartTime == 0L) {
+                    taskActualStartTime = System.currentTimeMillis()
+                    Log.d("TaskControl", "Task actually started at: $taskActualStartTime (${taskActualStartTime - activityOpenTime}ms after activity opened)")
+                }
+            }
+            is TaskState.Completed -> {
+                // Task completed - will be handled in completeTask method
+                Log.d("TaskControl", "Task state shows completed: ${taskState.endCondition}")
+            }
+            else -> {
+                // Other states don't need special data collection handling
             }
         }
     }
@@ -270,389 +335,180 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * Enhanced message observation with comprehensive timeout debugging and multiple fallback approaches
+     * Enhanced message observation with data collection
      */
     private fun observeNetworkMessages() {
-        Log.d("TaskControl", "=== SETTING UP MESSAGE LISTENER ===")
-        Log.d("TaskControl", "NetworkClient: ${networkClient::class.java.simpleName}")
-        Log.d("TaskControl", "Connection state: ${NetworkManager.isConnected()}")
-        Log.d("TaskControl", "Current session ID: $currentSessionId")
+        Log.d("TaskControl", "Setting up message listener with data collection")
 
         lifecycleScope.launch {
-            Log.d("TaskControl", "Starting message collection coroutine...")
             try {
                 networkClient.receiveMessages().collectLatest { message ->
-                    Log.d("TaskControl", "*** MESSAGE RECEIVED FROM PROJECTOR ***")
-                    Log.d("TaskControl", "Message type: ${message::class.java.simpleName}")
-                    Log.d("TaskControl", "Full class name: ${message::class.java.name}")
-                    Log.d("TaskControl", "Message content: $message")
-                    Log.d("TaskControl", "Activity lifecycle state: ${lifecycle.currentState}")
-
-                    // 🎯 ENHANCED: Add explicit TaskTimeoutMessage type checking
-                    Log.d("TaskControl", "Is TaskTimeoutMessage? ${message is TaskTimeoutMessage}")
-                    if (message is TaskTimeoutMessage) {
-                        Log.d("TaskControl", "✅ CONFIRMED: This is a TaskTimeoutMessage!")
-                        Log.d("TaskControl", "TaskID: ${message.taskId}")
-                        Log.d("TaskControl", "Duration: ${message.actualDuration}ms")
-                        Log.d("TaskControl", "Stroops: ${message.stroopsDisplayed}")
-                    }
-
-                    // Check if TaskTimeoutMessage class is available
-                    try {
-                        val timeoutClass = TaskTimeoutMessage::class.java
-                        Log.d("TaskControl", "TaskTimeoutMessage class available: ${timeoutClass.name}")
-                        Log.d("TaskControl", "Message class matches? ${message::class.java == timeoutClass}")
-                    } catch (e: Exception) {
-                        Log.e("TaskControl", "TaskTimeoutMessage class not available!", e)
-                    }
+                    Log.d("TaskControl", "Message received: ${message::class.java.simpleName}")
 
                     // Only process messages if activity is resumed
                     if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
-                        Log.d("TaskControl", "Processing message (activity resumed)")
-
-                        // 🎯 ENHANCED: Multiple fallback approaches for message matching
                         when (message) {
-                            // 🎯 PRIMARY: Try direct type matching first
                             is TaskTimeoutMessage -> {
-                                Log.d("TaskControl", "🎯 MATCHED TaskTimeoutMessage via direct 'is' check!")
                                 handleTaskTimeout(message)
                             }
 
+                            // Enhanced Stroop messages with data collection
+                            is StroopStartedMessage -> {
+                                handleStroopStarted(message)
+                            }
+
+                            is StroopEndedMessage -> {
+                                handleStroopEnded(message)
+                            }
+
+                            // LEGACY: Keep old message handlers for compatibility
+                            is StroopDisplayMessage -> {
+                                handleStroopDisplay(message)
+                            }
+
+                            is StroopHiddenMessage -> {
+                                handleStroopHidden()
+                            }
+
+                            // Connection management messages
+                            is HeartbeatMessage -> {
+                                Log.v("TaskControl", "Heartbeat received")
+                            }
+
+                            is HandshakeResponseMessage -> {
+                                Log.d("TaskControl", "Handshake response received")
+                            }
+
                             else -> {
-                                // 🎯 FALLBACK 1: Check by message type enum
-                                if (message.messageType == MessageType.TASK_TIMEOUT) {
-                                    Log.d("TaskControl", "🎯 MATCHED by MessageType.TASK_TIMEOUT!")
-                                    try {
-                                        val timeoutMessage = message as TaskTimeoutMessage
-                                        handleTaskTimeout(timeoutMessage)
-                                    } catch (e: ClassCastException) {
-                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage", e)
-                                    }
-                                }
-                                // 🎯 FALLBACK 2: Check by class name string
-                                else if (message::class.java.simpleName == "TaskTimeoutMessage") {
-                                    Log.d("TaskControl", "🎯 MATCHED by class name!")
-                                    try {
-                                        val timeoutMessage = message as TaskTimeoutMessage
-                                        handleTaskTimeout(timeoutMessage)
-                                    } catch (e: ClassCastException) {
-                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage by class name", e)
-                                    }
-                                }
-                                // 🎯 FALLBACK 3: Check by full class name
-                                else if (message::class.java.name.contains("TaskTimeoutMessage")) {
-                                    Log.d("TaskControl", "🎯 MATCHED by full class name!")
-                                    try {
-                                        val timeoutMessage = message as TaskTimeoutMessage
-                                        handleTaskTimeout(timeoutMessage)
-                                    } catch (e: ClassCastException) {
-                                        Log.e("TaskControl", "❌ Failed to cast to TaskTimeoutMessage by full class name", e)
-                                    }
-                                }
-                                // Handle other message types
-                                else {
-                                    when (message) {
-                                        // Enhanced Stroop messages from updated Projector
-                                        is StroopStartedMessage -> {
-                                            Log.d("TaskControl", "MATCHED StroopStartedMessage")
-                                            handleStroopStarted(message)
-                                        }
-
-                                        is StroopEndedMessage -> {
-                                            Log.d("TaskControl", "MATCHED StroopEndedMessage")
-                                            handleStroopEnded(message)
-                                        }
-
-                                        // LEGACY: Keep old message handlers for compatibility
-                                        is StroopDisplayMessage -> {
-                                            Log.d("TaskControl", "MATCHED StroopDisplayMessage (legacy)")
-                                            handleStroopDisplay(message)
-                                        }
-
-                                        is StroopHiddenMessage -> {
-                                            Log.d("TaskControl", "MATCHED StroopHiddenMessage (legacy)")
-                                            handleStroopHidden()
-                                        }
-
-                                        // Connection management messages
-                                        is HeartbeatMessage -> {
-                                            Log.v("TaskControl", "Heartbeat received - connection alive")
-                                            // Ignore heartbeats - they're just for connection monitoring
-                                        }
-
-                                        is HandshakeResponseMessage -> {
-                                            Log.d("TaskControl", "Handshake response received")
-                                            // Ignore handshake responses - they're handled by the connection logic
-                                        }
-
-                                        else -> {
-                                            Log.w("TaskControl", "❌ UNMATCHED MESSAGE TYPE")
-                                            Log.w("TaskControl", "Message class: ${message::class.java.name}")
-                                            Log.w("TaskControl", "Available interfaces: ${message::class.java.interfaces.contentToString()}")
-                                            Log.w("TaskControl", "Message string: $message")
-                                            Log.w("TaskControl", "Message superclass: ${message::class.java.superclass?.name}")
-
-                                            // Still forward to TaskControlManager for other message types
-                                            Log.d("TaskControl", "Forwarding to TaskControlManager...")
-                                            taskControlManager.handleTaskMessage(message)
-                                        }
-                                    }
-                                }
+                                Log.w("TaskControl", "Unmatched message: ${message::class.java.name}")
+                                taskControlManager.handleTaskMessage(message)
                             }
                         }
-                    } else {
-                        Log.w("TaskControl", "Activity not resumed, ignoring message: ${message::class.simpleName}")
-                        Log.w("TaskControl", "Current state: ${lifecycle.currentState}, Required: ${androidx.lifecycle.Lifecycle.State.RESUMED}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("TaskControl", "💥 CRITICAL ERROR in message listener", e)
-                Log.e("TaskControl", "Exception type: ${e::class.java.simpleName}")
-                Log.e("TaskControl", "Exception message: ${e.message}")
-                Log.e("TaskControl", "Stack trace:")
-                e.printStackTrace()
+                Log.e("TaskControl", "Critical error in message listener", e)
             }
-
-            Log.w("TaskControl", "⚠️ Message collection coroutine ended - this should not happen!")
         }
-
-        Log.d("TaskControl", "=== MESSAGE LISTENER SETUP COMPLETE ===")
     }
 
     /**
-     * Enhanced task timeout handling with comprehensive state management
-     * 🎯 ENHANCED: Uses precise message flow detection for Stroop state
+     * Handle task timeout with raw data handoff
+     * SPECIAL CASE: If stroop is active, allow 1 second grace period for response
      */
     private fun handleTaskTimeout(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "🕒 Task timed out: ${message.taskId}")
-        Log.d("TaskControl", "Duration: ${message.actualDuration}ms")
-        Log.d("TaskControl", "Stroops displayed: ${message.stroopsDisplayed}")
-        Log.d("TaskControl", "Current Stroop active: $isStroopActive")
-        Log.d("TaskControl", "Current Stroop word: $currentStroopWord")
-        Log.d("TaskControl", "Task already timed out: $isTaskTimedOut")
+        Log.d("TaskControl", "Task timed out: ${message.taskId}, duration: ${message.actualDuration}ms")
 
-        // Prevent duplicate timeout handling
         if (isTaskTimedOut) {
-            Log.w("TaskControl", "Task already timed out, ignoring duplicate timeout message")
+            Log.w("TaskControl", "Task already timed out, ignoring duplicate")
             return
         }
 
-        // 🎯 ENHANCED: Set timeout flag immediately to prevent further processing
         isTaskTimedOut = true
 
-        // 🎯 PRECISE DETECTION: Scenario 2 = Stroop was started but not ended yet
-        // This means: StroopStartedMessage received, but no StroopEndedMessage yet
-        // Which is exactly what isStroopActive && currentStroopWord != null represents!
         val isStroopActiveAtTimeout = isStroopActive && currentStroopWord != null
 
         if (isStroopActiveAtTimeout) {
-            Log.d("TaskControl", "🎯 SCENARIO 2: Timeout during active Stroop display")
-            Log.d("TaskControl", "- StroopStarted was received: ✅")
-            Log.d("TaskControl", "- StroopEnded was NOT received yet: ❌")
-            Log.d("TaskControl", "- Current Stroop word: '$currentStroopWord'")
-            Log.d("TaskControl", "- Keeping response buttons active for 1 second grace period")
+            Log.d("TaskControl", "TIMEOUT WITH ACTIVE STROOP: Allowing 1 second grace period for response")
 
-            // Immediately disable all control buttons but keep response buttons active
+            // Disable all control buttons but KEEP response buttons active
             disableControlButtonsOnly()
+            binding.textStroopStatus.text = "Task Timeout - Final response window (1 second)"
 
-            // Show timeout status but keep Stroop word visible
-            binding.textStroopStatus.text = "Task Timeout - Final response window"
-
-            // Schedule full timeout UI after 1 second
+            // Schedule navigation after 1 second grace period
             binding.root.postDelayed({
-                Log.d("TaskControl", "1 second grace period ended - applying full timeout UI")
-                showTaskTimeoutWithStroopEnded(message)
-            }, 1000) // 1 second delay
+                Log.d("TaskControl", "Grace period ended - checking if response was recorded")
+
+                // Check if response was recorded during grace period
+                val responseRecordedInGrace = stroopResponses.any {
+                    it.stroopIndex == currentStroopIndex && it.responseTime != null && it.responseTime!! > System.currentTimeMillis() - 1000
+                }
+
+                if (!responseRecordedInGrace) {
+                    Log.d("TaskControl", "No response during grace period - marking stroop as missed")
+                    recordMissedStroop()
+                }
+
+                Log.d("TaskControl", "Navigating to TaskSummary after grace period")
+                navigateToTaskSummary("Timed Out")
+            }, 1000) // 1 second grace period
+
         } else {
-            Log.d("TaskControl", "🎯 SCENARIO 1: Timeout during interval or no active Stroop")
-            Log.d("TaskControl", "- Either no Stroop was active, or StroopEnded was already received")
-            Log.d("TaskControl", "- Showing timeout UI immediately")
-            showTaskTimeout(message)
+            Log.d("TaskControl", "TIMEOUT WITHOUT ACTIVE STROOP: Navigating immediately")
+            // No active stroop - navigate immediately
+            navigateToTaskSummary("Timed Out")
         }
 
-        // ENHANCED: Notify TaskControlNetworkManager for state synchronization
+        // Notify TaskControlManager in background
         try {
-            Log.d("TaskControl", "Notifying TaskControlManager of timeout for state synchronization")
             taskControlManager.notifyTaskTimeout(
                 message.taskId,
                 message.actualDuration,
                 message.stroopsDisplayed
             )
-            Log.d("TaskControl", "✅ TaskControlManager notified successfully")
         } catch (e: Exception) {
-            Log.e("TaskControl", "❌ Error notifying TaskControlManager of timeout", e)
-            // Don't fail the UI update if state sync fails
+            Log.e("TaskControl", "Error notifying TaskControlManager of timeout", e)
+            // Don't block navigation on network error
         }
     }
 
     /**
-     * Show task timeout state (immediate - no active Stroop)
-     */
-    private fun showTaskTimeout(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "Showing task timeout UI immediately")
-
-        // Update status
-        binding.textStroopStatus.text = "Task Timeout Reached"
-
-        // 🎯 Show "Task ended" instead of "Task Completed"
-        binding.textCurrentColor.text = "Task ended"
-        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
-
-        // Hide all task control buttons
-        binding.btnTriggerStroop.visibility = View.GONE
-        binding.btnPauseTask.visibility = View.GONE
-        binding.btnResumeTask.visibility = View.GONE
-        binding.btnResetTask.visibility = View.GONE
-
-        // Hide task completion buttons
-        binding.btnTaskSuccess.visibility = View.GONE
-        binding.btnTaskFailed.visibility = View.GONE
-        binding.btnTaskGivenUp.visibility = View.GONE
-
-        // Disable response buttons
-        setResponseButtonsState(false)
-
-        // Show and enable return button with distinctive styling
-        binding.btnReturnToTasks.visibility = View.VISIBLE
-        binding.btnReturnToTasks.isEnabled = true
-        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
-        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
-
-        // Show timeout notification
-        val timeoutSeconds = message.actualDuration / 1000
-        Snackbar.make(
-            binding.root,
-            "Task timed out after ${timeoutSeconds}s. ${message.stroopsDisplayed} Stroops displayed.",
-            Snackbar.LENGTH_LONG
-        ).show()
-
-        // Reset state
-        isStroopActive = false
-        currentStroopWord = null
-        responseButtonsActive = false
-
-        Log.d("TaskControl", "Task timeout UI setup complete")
-    }
-
-    /**
-     * 🎯 NEW: Hide all control buttons, keep response buttons active during grace period
-     */
-    private fun disableControlButtonsOnly() {
-        Log.d("TaskControl", "Hiding control buttons only (keeping response buttons active)")
-
-        // Hide all task control buttons
-        binding.btnTriggerStroop.visibility = View.GONE
-        binding.btnPauseTask.visibility = View.GONE
-        binding.btnResumeTask.visibility = View.GONE
-        binding.btnResetTask.visibility = View.GONE
-
-        // Hide task completion buttons
-        binding.btnTaskSuccess.visibility = View.GONE
-        binding.btnTaskFailed.visibility = View.GONE
-        binding.btnTaskGivenUp.visibility = View.GONE
-
-        // Keep response buttons active and visible - don't change them here
-        // They will be handled by the 1-second grace period
-
-        // Show return button but don't enable it yet (wait for full timeout)
-        binding.btnReturnToTasks.visibility = View.VISIBLE
-        binding.btnReturnToTasks.isEnabled = false
-        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.black))
-    }
-
-    /**
-     * 🎯 NEW: Show timeout UI after Stroop grace period ended
-     */
-    private fun showTaskTimeoutWithStroopEnded(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "Showing task timeout UI after Stroop grace period")
-
-        // Update status
-        binding.textStroopStatus.text = "Task Timeout Reached"
-
-        // 🎯 Change Stroop display to "Task ended" instead of "Task Completed"
-        binding.textCurrentColor.text = "Task ended"
-        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
-
-        // Now disable response buttons (grace period over)
-        setResponseButtonsState(false)
-
-        // Enable return button with proper styling (make it distinctive)
-        binding.btnReturnToTasks.isEnabled = true
-        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
-        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
-
-        // Show timeout notification
-        val timeoutSeconds = message.actualDuration / 1000
-        Snackbar.make(
-            binding.root,
-            "Task timed out after ${timeoutSeconds}s. ${message.stroopsDisplayed} Stroops displayed.",
-            Snackbar.LENGTH_LONG
-        ).show()
-
-        // Reset state
-        isStroopActive = false
-        currentStroopWord = null
-        responseButtonsActive = false
-
-        Log.d("TaskControl", "Task timeout UI setup complete after grace period")
-    }
-
-    /**
-     * Return to task selection
-     */
-    private fun returnToTaskSelection() {
-        Log.d("TaskControl", "Returning to task selection")
-        // Close this activity and return to task selection
-        finish()
-    }
-
-    /**
-     * Handle enhanced Stroop started message from updated Projector
+     * Handle enhanced Stroop started message with data collection
      */
     private fun handleStroopStarted(message: StroopStartedMessage) {
-        // Don't process new Stroops if task has timed out
         if (isTaskTimedOut) {
             Log.d("TaskControl", "Ignoring StroopStarted - task has timed out")
             return
         }
 
-        Log.d("TaskControl", "Stroop started: index=${message.stroopIndex}, word='${message.word}', correctAnswer='${message.correctAnswer}'")
+        Log.d("TaskControl", "Stroop started: #${message.stroopIndex}, word='${message.word}', answer='${message.correctAnswer}'")
 
+        // Record stroop start for timing
+        currentStroopStartTime = System.currentTimeMillis()
+        currentStroopIndex = message.stroopIndex
         currentStroopWord = message.correctAnswer
         isStroopActive = true
 
-        // Display the word participant should say with optimal font size
+        // Display the word
         displayWordWithOptimalSize(message.correctAnswer)
-
-        // Update status with enhanced information
         binding.textStroopStatus.text = "Stroop #${message.stroopIndex} Active - Listening for response"
-
-        // Activate response buttons
         setResponseButtonsState(true)
 
-        Log.d("TaskControl", "UI updated for enhanced Stroop display")
+        Log.d("TaskControl", "Stroop #${message.stroopIndex} started at: $currentStroopStartTime")
     }
 
     /**
-     * Handle Stroop ended message from updated Projector
+     * Handle Stroop ended message with missed stroop detection
      */
     private fun handleStroopEnded(message: StroopEndedMessage) {
-        // Don't process if task has timed out
         if (isTaskTimedOut) {
             Log.d("TaskControl", "Ignoring StroopEnded - task has timed out")
             return
         }
 
-        Log.d("TaskControl", "Stroop ended: index=${message.stroopIndex}, reason=${message.endReason}, duration=${message.displayDuration}ms")
+        Log.d("TaskControl", "Stroop ended: #${message.stroopIndex}, reason=${message.endReason}")
+
+        // Check if this stroop was missed (no response recorded)
+        val wasResponseRecorded = stroopResponses.any { it.stroopIndex == message.stroopIndex }
+
+        if (!wasResponseRecorded && isStroopActive) {
+            // Schedule missed stroop check after 1 second grace period
+            binding.root.postDelayed({
+                // Double-check if response was recorded during grace period
+                val responseRecordedInGrace = stroopResponses.any { it.stroopIndex == message.stroopIndex }
+                if (!responseRecordedInGrace) {
+                    recordMissedStroop()
+                    Log.d("TaskControl", "Stroop #${message.stroopIndex} marked as missed after grace period")
+                }
+            }, 1000)
+        }
 
         isStroopActive = false
 
-        // If no response was recorded, keep buttons active for 1 second grace period
-        if (responseButtonsActive) {
-            // Schedule deactivation after 1 second
+        // Keep buttons active for grace period if no response was recorded
+        if (responseButtonsActive && !wasResponseRecorded) {
             binding.root.postDelayed({
-                if (!isStroopActive && !isTaskTimedOut) { // Only deactivate if no new stroop started and not timed out
+                if (!isStroopActive && !isTaskTimedOut) {
                     setResponseButtonsState(false)
                     showWaitingForStroop()
                 }
@@ -665,48 +521,50 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * LEGACY: Handle old Stroop display message format (for compatibility)
+     * Record missed stroop response
+     */
+    private fun recordMissedStroop() {
+        val response = StroopResponse(
+            stroopIndex = currentStroopIndex,
+            word = currentStroopWord ?: "unknown",
+            correctAnswer = currentStroopWord ?: "unknown",
+            response = null, // null indicates missed
+            reactionTimeMs = -1, // -1 indicates no reaction time
+            startTime = currentStroopStartTime,
+            responseTime = null
+        )
+
+        stroopResponses.add(response)
+        Log.d("TaskControl", "Recorded missed stroop: #${currentStroopIndex}")
+    }
+
+    /**
+     * LEGACY: Handle old Stroop display message format
      */
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
-        // Don't process if task has timed out
-        if (isTaskTimedOut) {
-            Log.d("TaskControl", "Ignoring legacy StroopDisplay - task has timed out")
-            return
-        }
+        if (isTaskTimedOut) return
 
-        Log.d("TaskControl", "Legacy Stroop displayed: word=${message.word}, correctAnswer=${message.correctAnswer}")
+        Log.d("TaskControl", "Legacy Stroop displayed: ${message.correctAnswer}")
 
+        currentStroopStartTime = System.currentTimeMillis()
+        currentStroopIndex += 1 // Increment for legacy messages
         currentStroopWord = message.correctAnswer
         isStroopActive = true
 
-        // Display the word participant should say with optimal font size
         displayWordWithOptimalSize(message.correctAnswer)
-
-        // Update status
         binding.textStroopStatus.text = "Stroop Active - Listening for response"
-
-        // Activate response buttons
         setResponseButtonsState(true)
-
-        Log.d("TaskControl", "UI updated for legacy Stroop display")
     }
 
     private fun handleStroopHidden() {
-        // Don't process if task has timed out
-        if (isTaskTimedOut) {
-            Log.d("TaskControl", "Ignoring StroopHidden - task has timed out")
-            return
-        }
+        if (isTaskTimedOut) return
 
         Log.d("TaskControl", "Stroop hidden")
-
         isStroopActive = false
 
-        // If no response was recorded, keep buttons active for 1 second grace period
         if (responseButtonsActive) {
-            // Schedule deactivation after 1 second
             binding.root.postDelayed({
-                if (!isStroopActive && !isTaskTimedOut) { // Only deactivate if no new stroop started and not timed out
+                if (!isStroopActive && !isTaskTimedOut) {
                     setResponseButtonsState(false)
                     showWaitingForStroop()
                 }
@@ -719,10 +577,8 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun displayWordWithOptimalSize(word: String) {
-        // Set the word
         binding.textCurrentColor.text = word
 
-        // Calculate optimal font size after layout is complete
         binding.textCurrentColor.post {
             val optimalSize = calculateOptimalFontSize(word, binding.textCurrentColor.width, binding.textCurrentColor.height)
             binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, optimalSize)
@@ -733,19 +589,17 @@ class ColorDisplayActivity : AppCompatActivity() {
 
     private fun calculateOptimalFontSize(text: String, availableWidth: Int, availableHeight: Int): Float {
         if (availableWidth <= 0 || availableHeight <= 0) {
-            return 48f // Default size if dimensions not available yet
+            return 48f
         }
 
         val paint = binding.textCurrentColor.paint
-        var testSize = 100f // Start with large size
+        var testSize = 100f
         val maxSize = 100f
         val minSize = 16f
 
-        // Account for padding
         val usableWidth = availableWidth * 0.8f
         val usableHeight = availableHeight * 0.8f
 
-        // Binary search for optimal size
         var low = minSize
         var high = maxSize
 
@@ -767,7 +621,6 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun setResponseButtonsState(active: Boolean) {
-        // Don't enable response buttons if task has timed out
         val shouldBeActive = active && !isTaskTimedOut
 
         responseButtonsActive = shouldBeActive
@@ -776,13 +629,11 @@ class ColorDisplayActivity : AppCompatActivity() {
         binding.btnResponseIncorrect.isEnabled = shouldBeActive
 
         if (shouldBeActive) {
-            // Set active colors
             binding.btnResponseCorrect.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
             binding.btnResponseIncorrect.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
             binding.btnResponseCorrect.setTextColor(ContextCompat.getColor(this, android.R.color.white))
             binding.btnResponseIncorrect.setTextColor(ContextCompat.getColor(this, android.R.color.white))
         } else {
-            // Set disabled colors
             val disabledColor = ContextCompat.getColor(this, android.R.color.darker_gray)
             binding.btnResponseCorrect.setBackgroundColor(disabledColor)
             binding.btnResponseIncorrect.setBackgroundColor(disabledColor)
@@ -791,8 +642,132 @@ class ColorDisplayActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Enhanced participant response recording with timing and data collection
+     * WORKS DURING TIMEOUT GRACE PERIOD: Can still record responses for active stroop
+     */
+    private fun recordParticipantResponse(isCorrect: Boolean) {
+        // Allow responses during timeout grace period for active stroop
+        if (isTaskTimedOut && !isStroopActive) {
+            Log.d("TaskControl", "Ignoring response - task timed out and no active stroop")
+            return
+        }
+
+        val responseTime = System.currentTimeMillis()
+        val reactionTimeMs = responseTime - currentStroopStartTime
+        val responseType = if (isCorrect) "CORRECT" else "INCORRECT"
+
+        Log.d("TaskControl", "Recording response: $responseType for stroop #$currentStroopIndex")
+        Log.d("TaskControl", "Reaction time: ${reactionTimeMs}ms")
+
+        if (isTaskTimedOut) {
+            Log.d("TaskControl", "Response recorded DURING TIMEOUT GRACE PERIOD")
+        }
+
+        // Create and store response data
+        val response = StroopResponse(
+            stroopIndex = currentStroopIndex,
+            word = currentStroopWord ?: "unknown",
+            correctAnswer = currentStroopWord ?: "unknown",
+            response = responseType,
+            reactionTimeMs = reactionTimeMs,
+            startTime = currentStroopStartTime,
+            responseTime = responseTime
+        )
+
+        stroopResponses.add(response)
+
+        // Immediately deactivate response buttons
+        setResponseButtonsState(false)
+
+        // Show feedback
+        val message = if (isCorrect) {
+            "Recorded: Participant correctly named the color"
+        } else {
+            "Recorded: Participant incorrectly named the color"
+        }
+
+        val feedbackMessage = if (isTaskTimedOut) {
+            "$message (during grace period)"
+        } else {
+            message
+        }
+
+        Snackbar.make(binding.root, feedbackMessage, Snackbar.LENGTH_SHORT).show()
+
+        // Update status
+        if (isTaskTimedOut) {
+            binding.textStroopStatus.text = "Response recorded - Task ending"
+        } else {
+            binding.textStroopStatus.text = "Response recorded - Waiting for next Stroop"
+        }
+
+        Log.d("TaskControl", "Response recorded. Total responses: ${stroopResponses.size}")
+    }
+
+    /**
+     * Navigate to TaskSummaryActivity with raw stroop data
+     */
+    private fun navigateToTaskSummary(endCondition: String) {
+        Log.d("TaskControl", "=== PREPARING TASK SUMMARY DATA ===")
+        Log.d("TaskControl", "Total stroop responses: ${stroopResponses.size}")
+        Log.d("TaskControl", "End condition: $endCondition")
+
+        // Calculate time on task (exclude countdown)
+        val taskEndTime = System.currentTimeMillis()
+        val timeOnTaskMs = if (taskActualStartTime > 0) {
+            taskEndTime - taskActualStartTime
+        } else {
+            // Fallback: use total time minus countdown
+            taskEndTime - activityOpenTime - countdownDuration
+        }
+
+        Log.d("TaskControl", "Time on task: ${timeOnTaskMs}ms")
+
+        // Create intent for TaskSummaryActivity with raw data
+        val intent = Intent(this, TaskSummaryActivity::class.java).apply {
+            // Basic task info
+            putExtra("TASK_ID", taskId)
+            putExtra("TASK_LABEL", taskLabel)
+            putExtra("TASK_TEXT", taskText)
+            putExtra("END_CONDITION", endCondition)
+            putExtra("TIME_ON_TASK_MS", timeOnTaskMs)
+            putExtra("COUNTDOWN_DURATION_MS", countdownDuration)
+            putExtra("TASK_START_TIME", taskActualStartTime)
+            putExtra("TASK_END_TIME", taskEndTime)
+
+            // Raw stroop response data - convert to arrays for Intent
+            val stroopIndices = stroopResponses.map { it.stroopIndex }.toIntArray()
+            val stroopWords = stroopResponses.map { it.word }.toTypedArray()
+            val stroopAnswers = stroopResponses.map { it.correctAnswer }.toTypedArray()
+            val stroopResponseTypes = stroopResponses.map { it.response ?: "MISSED" }.toTypedArray()
+            val stroopReactionTimes = stroopResponses.map { it.reactionTimeMs }.toLongArray()
+            val stroopStartTimes = stroopResponses.map { it.startTime }.toLongArray()
+            val stroopResponseTimes = stroopResponses.map { it.responseTime ?: -1L }.toLongArray()
+
+            putExtra("STROOP_INDICES", stroopIndices)
+            putExtra("STROOP_WORDS", stroopWords)
+            putExtra("STROOP_ANSWERS", stroopAnswers)
+            putExtra("STROOP_RESPONSES", stroopResponseTypes)
+            putExtra("STROOP_REACTION_TIMES", stroopReactionTimes)
+            putExtra("STROOP_START_TIMES", stroopStartTimes)
+            putExtra("STROOP_RESPONSE_TIMES", stroopResponseTimes)
+
+            // Session info
+            putExtra("SESSION_ID", currentSessionId)
+            putExtra("IS_INDIVIDUAL_TASK", isIndividualTask)
+        }
+
+        Log.d("TaskControl", "Starting TaskSummaryActivity with ${stroopResponses.size} stroop responses")
+        startActivity(intent)
+
+        // Finish this activity since user shouldn't return here
+        // TaskSummaryActivity will handle proper navigation flow
+        finish()
+    }
+
     private fun showTaskReady() {
-        isTaskTimedOut = false // Reset timeout state
+        isTaskTimedOut = false
         binding.textStroopStatus.text = "Task ready - Press START to begin"
         binding.textCurrentColor.text = "Waiting..."
         binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 48f)
@@ -800,6 +775,20 @@ class ColorDisplayActivity : AppCompatActivity() {
         isStroopActive = false
         setResponseButtonsState(false)
         binding.btnReturnToTasks.visibility = View.GONE
+
+        // Reset data collection
+        resetDataCollection()
+    }
+
+    /**
+     * Reset data collection for new task
+     */
+    private fun resetDataCollection() {
+        stroopResponses.clear()
+        taskActualStartTime = 0L
+        currentStroopStartTime = 0L
+        currentStroopIndex = 0
+        Log.d("TaskControl", "Data collection reset")
     }
 
     private fun showWaitingForStroop() {
@@ -812,11 +801,81 @@ class ColorDisplayActivity : AppCompatActivity() {
         }
     }
 
+    private fun showTaskTimeout(message: TaskTimeoutMessage) {
+        Log.d("TaskControl", "Showing task timeout UI")
+
+        binding.textStroopStatus.text = "Task Timeout Reached"
+        binding.textCurrentColor.text = "Task ended"
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+
+        binding.btnTriggerStroop.visibility = View.GONE
+        binding.btnPauseTask.visibility = View.GONE
+        binding.btnResumeTask.visibility = View.GONE
+        binding.btnResetTask.visibility = View.GONE
+        binding.btnTaskSuccess.visibility = View.GONE
+        binding.btnTaskFailed.visibility = View.GONE
+        binding.btnTaskGivenUp.visibility = View.GONE
+
+        setResponseButtonsState(false)
+
+        binding.btnReturnToTasks.visibility = View.VISIBLE
+        binding.btnReturnToTasks.isEnabled = true
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+        val timeoutSeconds = message.actualDuration / 1000
+        Snackbar.make(
+            binding.root,
+            "Task timed out after ${timeoutSeconds}s. ${message.stroopsDisplayed} Stroops displayed.",
+            Snackbar.LENGTH_LONG
+        ).show()
+
+        isStroopActive = false
+        currentStroopWord = null
+        responseButtonsActive = false
+    }
+
+    private fun disableControlButtonsOnly() {
+        binding.btnTriggerStroop.visibility = View.GONE
+        binding.btnPauseTask.visibility = View.GONE
+        binding.btnResumeTask.visibility = View.GONE
+        binding.btnResetTask.visibility = View.GONE
+        binding.btnTaskSuccess.visibility = View.GONE
+        binding.btnTaskFailed.visibility = View.GONE
+        binding.btnTaskGivenUp.visibility = View.GONE
+
+        binding.btnReturnToTasks.visibility = View.VISIBLE
+        binding.btnReturnToTasks.isEnabled = false
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.black))
+    }
+
+    private fun showTaskTimeoutWithStroopEnded(message: TaskTimeoutMessage) {
+        binding.textStroopStatus.text = "Task Timeout Reached"
+        binding.textCurrentColor.text = "Task ended"
+        binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+
+        setResponseButtonsState(false)
+
+        binding.btnReturnToTasks.isEnabled = true
+        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+        val timeoutSeconds = message.actualDuration / 1000
+        Snackbar.make(
+            binding.root,
+            "Task timed out after ${timeoutSeconds}s. ${message.stroopsDisplayed} Stroops displayed.",
+            Snackbar.LENGTH_LONG
+        ).show()
+
+        isStroopActive = false
+        currentStroopWord = null
+        responseButtonsActive = false
+    }
+
     private fun showNotConnected() {
         binding.textStroopStatus.text = "Not Connected to Projector"
         binding.textCurrentColor.text = "Please reconnect"
-
-        // Disable all control buttons
         updateButtonStates(TaskState.Error("CONNECTION_ERROR", "Not connected"))
         setResponseButtonsState(false)
     }
@@ -824,8 +883,6 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun showSessionError() {
         binding.textStroopStatus.text = "No Session Available"
         binding.textCurrentColor.text = "Please restart from participant info"
-
-        // Disable all control buttons
         updateButtonStates(TaskState.Error("SESSION_ERROR", "No session"))
         setResponseButtonsState(false)
 
@@ -836,33 +893,9 @@ class ColorDisplayActivity : AppCompatActivity() {
         ).show()
     }
 
-    private fun recordParticipantResponse(isCorrect: Boolean) {
-        // Don't record responses if task has timed out
-        if (isTaskTimedOut) {
-            Log.d("TaskControl", "Ignoring response - task has timed out")
-            return
-        }
-
-        val responseType = if (isCorrect) "CORRECT" else "INCORRECT"
-        Log.d("TaskControl", "Recording participant response: $responseType for word: $currentStroopWord")
-
-        // TODO: Send participant response to data collection system
-        // This data will be used for calculating error rates and reaction times
-
-        // Immediately deactivate response buttons
-        setResponseButtonsState(false)
-
-        // Show feedback
-        val message = if (isCorrect) {
-            "Recorded: Participant correctly named the color"
-        } else {
-            "Recorded: Participant incorrectly named the color"
-        }
-
-        Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
-
-        // Update status
-        binding.textStroopStatus.text = "Response recorded - Waiting for next Stroop"
+    private fun returnToTaskSelection() {
+        Log.d("TaskControl", "Returning to task selection")
+        finish()
     }
 
     private fun startTask() {
@@ -871,7 +904,8 @@ class ColorDisplayActivity : AppCompatActivity() {
 
         Log.d("TaskControl", "Starting task: $taskIdValue")
 
-        // Reset timeout state when starting new task
+        // Reset data collection for new task
+        resetDataCollection()
         isTaskTimedOut = false
 
         lifecycleScope.launch {
@@ -896,17 +930,10 @@ class ColorDisplayActivity : AppCompatActivity() {
         val taskIdValue = taskId ?: return
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Pausing task: $taskIdValue")
-
         lifecycleScope.launch {
             val success = taskControlManager.pauseTask(taskIdValue, sessionIdValue)
-
             if (!success) {
-                Snackbar.make(
-                    binding.root,
-                    "Failed to pause task.",
-                    Snackbar.LENGTH_LONG
-                ).show()
+                Snackbar.make(binding.root, "Failed to pause task.", Snackbar.LENGTH_LONG).show()
             }
         }
     }
@@ -915,17 +942,10 @@ class ColorDisplayActivity : AppCompatActivity() {
         val taskIdValue = taskId ?: return
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Resuming task: $taskIdValue")
-
         lifecycleScope.launch {
             val success = taskControlManager.resumeTask(taskIdValue, sessionIdValue)
-
             if (!success) {
-                Snackbar.make(
-                    binding.root,
-                    "Failed to resume task.",
-                    Snackbar.LENGTH_LONG
-                ).show()
+                Snackbar.make(binding.root, "Failed to resume task.", Snackbar.LENGTH_LONG).show()
             }
         }
     }
@@ -934,96 +954,65 @@ class ColorDisplayActivity : AppCompatActivity() {
         val taskIdValue = taskId ?: return
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Resetting task: $taskIdValue")
-
         lifecycleScope.launch {
             val success = taskControlManager.resetTask(taskIdValue, sessionIdValue)
-
             if (success) {
                 showTaskReady()
             } else {
-                Snackbar.make(
-                    binding.root,
-                    "Failed to reset task.",
-                    Snackbar.LENGTH_LONG
-                ).show()
+                Snackbar.make(binding.root, "Failed to reset task.", Snackbar.LENGTH_LONG).show()
             }
         }
     }
 
+    /**
+     * Enhanced task completion with raw data handoff to TaskSummaryActivity
+     */
     private fun completeTask(condition: String) {
         val taskIdValue = taskId ?: return
         val sessionIdValue = currentSessionId ?: return
 
         Log.d("TaskControl", "Completing task: $taskIdValue with condition: $condition")
 
-        // 🎯 NEW: Immediately update UI to show task completion in progress
+        // Show completion UI immediately
         showTaskCompletion(condition)
 
+        // Navigate to TaskSummaryActivity with raw data - no need to wait for network
+        navigateToTaskSummary(condition)
+
+        // End task via network in background (don't wait for it)
         lifecycleScope.launch {
             val success = taskControlManager.endTask(taskIdValue, condition, sessionIdValue)
 
             if (!success) {
-                Snackbar.make(
-                    binding.root,
-                    "Failed to end task.",
-                    Snackbar.LENGTH_LONG
-                ).show()
-
-                // Reset UI on failure - don't try to change state, just show error
-                // The taskControlManager will handle the actual state management
-                Log.w("TaskControl", "Failed to end task, letting TaskControlManager handle state")
+                Log.w("TaskControl", "Failed to end task via TaskControlManager (network)")
+                // Don't show error to user since we've already navigated away
+                // TaskSummaryActivity will handle the data saving
             }
-            // Success feedback is handled by TaskState.Completed in updateButtonStates
         }
     }
 
-    /**
-     * 🎯 NEW: Show task completion state immediately when user presses Success/Failed/Given Up
-     */
     private fun showTaskCompletion(condition: String) {
-        Log.d("TaskControl", "Showing task completion UI for condition: $condition")
+        Log.d("TaskControl", "Task completing with condition: $condition - navigating to summary")
 
-        // Update status
+        // Just show a brief completion message
         binding.textStroopStatus.text = "Task Ending - $condition"
-
-        // Update Stroop display area
-        binding.textCurrentColor.text = "Task ended by moderator"
+        binding.textCurrentColor.text = "Processing..."
         binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
 
-        // Hide all task control buttons
-        binding.btnTriggerStroop.visibility = View.GONE
-        binding.btnPauseTask.visibility = View.GONE
-        binding.btnResumeTask.visibility = View.GONE
-        binding.btnResetTask.visibility = View.GONE
-
-        // Hide task completion buttons (they just got pressed)
-        binding.btnTaskSuccess.visibility = View.GONE
-        binding.btnTaskFailed.visibility = View.GONE
-        binding.btnTaskGivenUp.visibility = View.GONE
-
-        // Disable response buttons immediately
+        // Disable all controls immediately
         setResponseButtonsState(false)
-
-        // Show return button (enabled and distinctive)
-        binding.btnReturnToTasks.visibility = View.VISIBLE
-        binding.btnReturnToTasks.isEnabled = true
-        binding.btnReturnToTasks.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
-        binding.btnReturnToTasks.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+        binding.btnTriggerStroop.isEnabled = false
+        binding.btnPauseTask.isEnabled = false
+        binding.btnResumeTask.isEnabled = false
+        binding.btnResetTask.isEnabled = false
+        binding.btnTaskSuccess.isEnabled = false
+        binding.btnTaskFailed.isEnabled = false
+        binding.btnTaskGivenUp.isEnabled = false
 
         // Reset state flags
         isStroopActive = false
         currentStroopWord = null
         responseButtonsActive = false
-
-        // Show completion notification
-        Snackbar.make(
-            binding.root,
-            "Task ended: $condition - Stopping Projector display",
-            Snackbar.LENGTH_LONG
-        ).show()
-
-        Log.d("TaskControl", "Task completion UI setup complete")
     }
 
     override fun onSupportNavigateUp(): Boolean {
