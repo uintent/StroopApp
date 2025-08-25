@@ -397,17 +397,18 @@ class TaskSummaryActivity : AppCompatActivity() {
      * Navigate to ASQ activity (placeholder)
      */
     private fun navigateToASQ() {
-        // TODO: Implement ASQActivity
-        Log.d("TaskSummary", "TODO: Navigate to ASQActivity")
+        Log.d("TaskSummary", "Navigating to ASQActivity")
 
-        Snackbar.make(
-            binding.root,
-            getString(R.string.task_summary_asq_not_implemented),
-            Snackbar.LENGTH_LONG
-        ).show()
+        val intent = Intent(this, ASQActivity::class.java)
 
-        // Fallback to task selection for now
-        navigateToTaskSelection()
+        // Pass task information to ASQ activity
+        intent.putExtra("TASK_ID", taskId)
+        intent.putExtra("TASK_LABEL", taskLabel)
+        intent.putExtra("SESSION_ID", sessionId)
+        intent.putExtra("IS_INDIVIDUAL_TASK", isIndividualTask)
+
+        startActivity(intent)
+        finish()
     }
 
     /**

@@ -57,4 +57,91 @@
 
     <!-- Percentages for SessionManager compatibility -->
     <string name="task_summary_percentage_format">%.1f%%</string>
+
+    <!-- ASQ Activity Strings -->
+    <string name="asq_title">After Scenario Questionnaire</string>
+    <string name="asq_unknown_task">Unknown Task</string>
+    <string name="asq_unknown_task_id">Unknown Task ID</string>
+    <string name="asq_task_label">Task: %1$s</string>
+
+    <!-- Instructions -->
+    <string name="asq_instructions_title">Instructions</string>
+    <string name="asq_instructions_text">Please rate your agreement with the following statements about the task you just completed. Use the 7-point scale where 1 means you completely disagree and 7 means you completely agree.</string>
+
+    <!-- Questions -->
+    <string name="asq_question_ease">I am satisfied with how easy it was to complete this task in this vehicle</string>
+    <string name="asq_question_time">I am satisfied with how much time I needed to complete this task in this vehicle</string>
+
+    <!-- Scale Labels -->
+    <string name="asq_scale_disagree">I completely disagree</string>
+    <string name="asq_scale_agree">I completely agree</string>
+    <string name="asq_scale_1">1 - I completely disagree</string>
+    <string name="asq_scale_7">7 - I completely agree</string>
+
+    <!-- Buttons -->
+    <string name="asq_btn_continue">Continue</string>
+    <string name="asq_btn_skip">Skip ASQ</string>
+
+    <!-- Skip Dialog -->
+    <string name="asq_skip_title">Skip ASQ Questions?</string>
+    <string name="asq_skip_message">Are you sure you want to skip the After Scenario Questionnaire? This data is important for the research.</string>
+    <string name="asq_skip_confirm">Skip</string>
+    <string name="asq_skip_cancel">Cancel</string>
+
+    <!-- Validation Messages -->
+    <string name="asq_please_answer_both">Please answer both questions before continuing</string>
+
+    <!-- Error Messages -->
+    <string name="asq_save_error">Failed to save ASQ data: %1$s</string>
+
+    <!-- Success Messages -->
+    <string name="asq_data_saved">ASQ responses saved successfully</string>
+
+    <!-- Settings Activity Strings -->
+    <string name="settings_title">App Settings</string>
+
+    <!-- Export Folder Section -->
+    <string name="settings_export_folder_title">Session Export Folder</string>
+    <string name="settings_export_folder_description">Choose where completed session JSON files will be saved. The app needs write permission to this folder.</string>
+    <string name="settings_current_folder">Current Export Folder:</string>
+    <string name="settings_folder_loading">Loading folder settings...</string>
+    <string name="settings_folder_checking">Checking folder permissions...</string>
+
+    <!-- Folder Status Messages -->
+    <string name="settings_folder_not_exist">Folder does not exist</string>
+    <string name="settings_folder_not_directory">Path is not a directory</string>
+    <string name="settings_folder_not_writable">Folder is not writable</string>
+    <string name="settings_folder_valid">✓ Valid folder (%1$d JSON files found)</string>
+
+    <!-- Folder Action Buttons -->
+    <string name="settings_browse_folder">Browse...</string>
+    <string name="settings_reset_default">Reset to Default</string>
+
+    <!-- Main Action Buttons -->
+    <string name="settings_reset_all">Reset</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_confirm">Confirm</string>
+
+    <!-- Success/Error Messages -->
+    <string name="settings_folder_selected">Folder selected successfully</string>
+    <string name="settings_folder_invalid">Selected folder is not valid</string>
+    <string name="settings_folder_reset_default">Export folder reset to default location</string>
+    <string name="settings_reset_original">All settings reset to original values</string>
+    <string name="settings_saved_successfully">Settings saved successfully</string>
+
+    <!-- Error Messages -->
+    <string name="settings_load_error">Error loading settings: %1$s</string>
+    <string name="settings_save_error">Error saving settings: %1$s</string>
+    <string name="settings_folder_picker_error">Error opening folder picker: %1$s</string>
+    <string name="settings_folder_process_error">Error processing selected folder: %1$s</string>
+    <string name="settings_folder_write_test_failed">Warning: Write test failed - you may not have permission to save files to this folder</string>
+    <string name="settings_export_folder_required">Export folder is required</string>
+    <string name="settings_export_folder_invalid">Selected export folder is not writable</string>
+
+    <!-- Unsaved Changes Dialog -->
+    <string name="settings_unsaved_changes_title">Unsaved Changes</string>
+    <string name="settings_unsaved_changes_message">You have unsaved changes. Do you want to discard them and exit?</string>
+    <string name="settings_discard_changes">Discard Changes</string>
+    <string name="settings_keep_editing">Keep Editing</string>
+
 </resources>

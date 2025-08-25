@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:fitsSystemWindows="true"
+    android:padding="16dp"
+    tools:context=".SettingsActivity">
+
+    <!-- Export Folder Settings Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        app:cardElevation="4dp"
+        app:cardCornerRadius="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_export_folder_title"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_export_folder_description"
+                android:textSize="14sp"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Current Folder Display -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_current_folder"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="4dp" />
+
+            <TextView
+                android:id="@+id/text_current_export_folder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_folder_loading"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:background="?android:attr/selectableItemBackground"
+                android:padding="8dp"
+                android:layout_marginBottom="4dp" />
+
+            <!-- Folder Status -->
+            <TextView
+                android:id="@+id/text_folder_info"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_folder_checking"
+                android:textSize="12sp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Folder Action Buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="end">
+
+                <Button
+                    android:id="@+id/btn_reset_folder_default"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_reset_default"
+                    android:layout_marginEnd="8dp"
+                    android:textColor="?android:attr/textColorPrimary"
+                    style="@style/Widget.AppCompat.Button.Borderless.Colored" />
+
+                <Button
+                    android:id="@+id/btn_browse_folder"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_browse_folder"
+                    android:drawableStart="@android:drawable/ic_menu_upload" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Spacer to push action buttons to bottom -->
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="16dp" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="?android:attr/selectableItemBackground"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/btn_reset_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_reset_all"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_cancel_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_cancel"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_confirm_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_confirm"
+            android:drawableEnd="@android:drawable/ic_menu_save" />
+
+    </LinearLayout>
+
+</LinearLayout>

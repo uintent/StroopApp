@@ -350,6 +350,7 @@ object SessionManager {
 
     /**
      * Convert SessionData to SessionExport format for FileManager compatibility
+     * UPDATED: Now includes car_model in export
      */
     private fun convertToSessionExport(sessionData: SessionData): SessionExport {
         return SessionExport(
@@ -357,6 +358,7 @@ object SessionManager {
                 participant_name = sessionData.participantName,
                 participant_number = sessionData.participantId,
                 participant_age = sessionData.participantAge,
+                car_model = sessionData.carModel,  // ✅ ADDED: Preserve car model
                 ended = sessionData.ended,
                 discarded = sessionData.discarded,
                 session_start_time = formatTimestamp(sessionData.interviewStartTime),
@@ -365,7 +367,7 @@ object SessionManager {
             tasks = sessionData.tasks.map { taskData ->
                 TaskExport(
                     task_number = taskData.taskId,
-                    task_counter = 0, // Default counter for single attempts
+                    task_counter = 0,
                     task_start_time = formatTimestamp(taskData.taskEndTime - taskData.timeRequiredMs),
                     task_metrics = TaskMetrics(
                         task_label = taskData.taskLabel,
@@ -376,7 +378,7 @@ object SessionManager {
                         mean_reaction_time_overall = if (taskData.stroopTotalCount > 0) taskData.stroopAverageReactionTime else null,
                         missed_stroops = taskData.stroopTotalCount - (taskData.stroopErrorRateCorrect + taskData.stroopErrorRateIncorrect).toInt() / 100 * taskData.stroopTotalCount,
                         time_on_task = taskData.timeRequiredMs,
-                        countdown_duration = 4000L // Default countdown duration
+                        countdown_duration = 4000L
                     ),
                     asq_responses = AsqResponses(
                         asq_ease = taskData.asqScores["ease"]?.toIntOrNull() ?: 0,
@@ -397,7 +399,7 @@ object SessionManager {
             participantName = sessionExport.session_info.participant_name,
             participantId = sessionExport.session_info.participant_number,
             participantAge = sessionExport.session_info.participant_age,
-            carModel = "unknown", // This info might not be in export format, use default
+            carModel = sessionExport.session_info.car_model,  // ✅ FIXED: Read actual car model
             interviewStartTime = parseTimestamp(sessionExport.session_info.session_start_time),
             interviewEndTime = sessionExport.session_info.session_end_time?.let { parseTimestamp(it) },
             tasks = sessionExport.tasks.map { taskExport ->
@@ -410,7 +412,7 @@ object SessionManager {
                     stroopErrorRateIncorrect = calculatePercentage(taskExport.task_metrics.incorrect_stroops, getTotalStroops(taskExport.task_metrics)),
                     stroopTotalCount = getTotalStroops(taskExport.task_metrics),
                     stroopAverageReactionTime = taskExport.task_metrics.mean_reaction_time_overall ?: 0.0,
-                    stroopIndividualTimes = emptyList(), // Not available in export format
+                    stroopIndividualTimes = emptyList(),
                     asqScores = mapOf(
                         "ease" to taskExport.asq_responses.asq_ease.toString(),
                         "time" to taskExport.asq_responses.asq_time.toString()
@@ -561,6 +563,45 @@ object SessionManager {
         _currentSession.value = sessionData
         Log.d("SessionManager", "Resumed session: ${sessionData.sessionId}")
     }
+
+    /**
+     * Update ASQ data for a specific task
+     * FR-DP-002: Store ASQ responses with task data
+     * Uses FileManager to persist changes to JSON file
+     */
+    suspend fun updateTaskASQData(taskId: String, asqData: Map<String, String>) {
+        val session = _currentSession.value ?: throw IllegalStateException("No current session")
+
+        Log.d("SessionManager", "=== UPDATING TASK ASQ DATA ===")
+        Log.d("SessionManager", "Task ID: $taskId")
+        Log.d("SessionManager", "ASQ Data: $asqData")
+
+        // Find the task to update
+        val tasks = session.tasks.toMutableList()
+        val taskIndex = tasks.indexOfLast { it.taskId == taskId }
+
+        if (taskIndex == -1) {
+            Log.e("SessionManager", "Task with ID $taskId not found in session")
+            throw IllegalArgumentException("Task with ID $taskId not found in current session")
+        }
+
+        // Update the task with ASQ scores
+        val updatedTask = tasks[taskIndex].copy(asqScores = asqData)
+        tasks[taskIndex] = updatedTask
+
+        // Update the session with modified task list
+        val updatedSession = session.copy(tasks = tasks)
+        _currentSession.value = updatedSession
+
+        Log.d("SessionManager", "Task ${updatedTask.taskId} updated with ASQ data: $asqData")
+
+        // Persist to file using FileManager
+        saveSessionToFile(updatedSession)
+
+        Log.d("SessionManager", "ASQ data persisted to file via FileManager")
+        Log.d("SessionManager", "=== TASK ASQ UPDATE COMPLETE ===")
+    }
+
 }
 
 /**

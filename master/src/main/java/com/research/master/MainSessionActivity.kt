@@ -417,11 +417,13 @@ class MainSessionActivity : AppCompatActivity() {
     }
 
     /**
-     * Open settings screen (placeholder)
+     * Open settings screen
      */
     private fun openSettings() {
-        // TODO: Create SettingsActivity
-        Snackbar.make(binding.root, "Settings screen - Coming soon", Snackbar.LENGTH_SHORT).show()
+        Log.d("MainSession", "Opening settings screen")
+
+        val intent = Intent(this, SettingsActivity::class.java)
+        startActivity(intent)
     }
 
     /**

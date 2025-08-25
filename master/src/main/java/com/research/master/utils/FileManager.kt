@@ -96,7 +96,8 @@ class FileManager(private val context: Context) {
         private const val CONFIG_FILE_NAME = "research_config.json"
         private const val EXTERNAL_CONFIG_FOLDER = "StroopApp"
         private const val PREFS_PARTICIPANT = "participant_prefs"
-
+        private const val PREFS_SETTINGS = "app_settings"
+        private const val KEY_EXPORT_FOLDER = "export_folder_path"
         // Version for future format migrations
         private const val CURRENT_FORMAT_VERSION = "1.0"
     }
@@ -127,6 +128,94 @@ class FileManager(private val context: Context) {
         // Ensure external config directory exists
         if (!externalConfigDir.exists()) {
             externalConfigDir.mkdirs()
+        }
+    }
+
+    /**
+     * Get the current export folder path
+     * @return Current export folder path, or default if not set
+     */
+    fun getExportFolder(): String {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+            val savedPath = prefs.getString(KEY_EXPORT_FOLDER, null)
+
+            if (savedPath.isNullOrEmpty()) {
+                // Return default path
+                getDefaultExportFolder()
+            } else {
+                savedPath
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get export folder setting", e)
+            getDefaultExportFolder()
+        }
+    }
+
+    /**
+     * Set the export folder path
+     * @param folderPath New export folder path
+     */
+    fun setExportFolder(folderPath: String) {
+        try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_EXPORT_FOLDER, folderPath)
+                .apply()
+
+            Log.d(TAG, "Export folder setting saved: $folderPath")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save export folder setting", e)
+            throw SessionFileException("Failed to save export folder setting: ${e.message}")
+        }
+    }
+
+    /**
+     * Get the default export folder path
+     * @return Default export folder path
+     */
+    fun getDefaultExportFolder(): String {
+        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        return File(documentsDir, "StroopApp_Sessions").absolutePath
+    }
+
+    /**
+     * Reset export folder to default
+     */
+    fun resetExportFolderToDefault() {
+        setExportFolder(getDefaultExportFolder())
+        Log.d(TAG, "Export folder reset to default")
+    }
+
+    /**
+     * Clear all app settings (for debugging/reset purposes)
+     */
+    fun clearAllSettings() {
+        try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .apply()
+
+            Log.d(TAG, "All app settings cleared")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear app settings", e)
+        }
+    }
+
+    /**
+     * Get all current settings as a map (for debugging/export)
+     */
+    fun getAllSettings(): Map<String, String> {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+            mapOf(
+                "export_folder" to getExportFolder(),
+                "default_export_folder" to getDefaultExportFolder()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get all settings", e)
+            emptyMap()
         }
     }
 
@@ -928,6 +1017,7 @@ data class SessionInfo(
     val participant_name: String,
     val participant_number: String,
     val participant_age: Int,
+    val car_model: String,  // ✅ ADDED: "old" or "new"
     val ended: Int,
     val discarded: Int,
     val session_start_time: String,
