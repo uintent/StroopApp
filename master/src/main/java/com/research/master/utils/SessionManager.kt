@@ -113,6 +113,14 @@ object SessionManager {
     }
 
     /**
+     * Get the current session file for completion status checking
+     * @return Current session file or null if no active session
+     */
+    fun getCurrentSessionFile(): File? {
+        return currentSessionFile
+    }
+
+    /**
      * Clear the current session without saving
      * UPDATED: Uses FileManager for session cleanup
      * Used when discarding session data

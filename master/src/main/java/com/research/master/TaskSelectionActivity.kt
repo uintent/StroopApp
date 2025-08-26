@@ -14,6 +14,8 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.snackbar.Snackbar
 import com.research.master.databinding.ActivityTaskSelectionBinding
 import com.research.master.utils.MasterConfigManager
+import com.research.master.utils.SessionManager
+import com.research.master.utils.FileManager
 import com.research.shared.models.TaskConfig
 import com.research.shared.models.TaskListConfig
 import kotlinx.coroutines.launch
@@ -21,14 +23,20 @@ import android.util.Log
 
 /**
  * Activity for selecting individual tasks or task lists
- * UPDATED: Now converts String task IDs to Int for FileManager compatibility
- * Displays tasks and task lists loaded from configuration file
+ * UPDATED: Now shows task completion status with visual indicators
+ * Tasks remain selectable regardless of completion status
+ * Supports both global view and task list filtering (future enhancement)
  */
 class TaskSelectionActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityTaskSelectionBinding
     private lateinit var tasksAdapter: TasksAdapter
     private lateinit var taskListsAdapter: TaskListsAdapter
+    private lateinit var fileManager: FileManager
+
+    // Task list context (for future task list filtering)
+    private var taskListId: String? = null
+    private var isTaskListMode: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,9 +44,16 @@ class TaskSelectionActivity : AppCompatActivity() {
         binding = ActivityTaskSelectionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize FileManager
+        fileManager = FileManager(this)
+
+        // Check if we're in task list mode (future enhancement)
+        taskListId = intent.getStringExtra("TASK_LIST_ID")
+        isTaskListMode = taskListId != null
+
         // Set up toolbar
         setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = "Select Task"
+        supportActionBar?.title = if (isTaskListMode) "Task List: $taskListId" else "Select Task"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         // Set up return to session manager button
@@ -87,17 +102,83 @@ class TaskSelectionActivity : AppCompatActivity() {
             }
 
             // Load individual tasks
-            val tasks = config.baseConfig.tasks
-            tasksAdapter.updateTasks(tasks)
+            val allTasks = config.baseConfig.tasks
 
-            // Load task lists
-            val taskLists = config.baseConfig.taskLists
-            taskListsAdapter.updateTaskLists(taskLists, tasks) // Pass tasks for validation
+            // Filter tasks if we're in task list mode (future enhancement)
+            val tasksToShow = if (isTaskListMode && taskListId != null) {
+                val taskListConfig = config.baseConfig.taskLists[taskListId]
+                if (taskListConfig != null) {
+                    val taskIds = taskListConfig.getTaskIds()
+                    allTasks.filterKeys { it in taskIds }
+                } else {
+                    Log.w("TaskSelection", "Task list '$taskListId' not found in config")
+                    allTasks
+                }
+            } else {
+                allTasks
+            }
+
+            tasksAdapter.updateTasks(tasksToShow)
+
+            // Load task lists (hide in task list mode)
+            val taskLists = if (isTaskListMode) {
+                emptyMap()
+            } else {
+                config.baseConfig.taskLists
+            }
+            taskListsAdapter.updateTaskLists(taskLists, allTasks)
+
+            // Check task completion status if we have an active session
+            checkTaskCompletionStatus(tasksToShow)
 
             // Update UI visibility
-            updateSectionVisibility(tasks, taskLists)
+            updateSectionVisibility(tasksToShow, taskLists)
 
-            Log.d("TaskSelection", "Loaded ${tasks.size} tasks and ${taskLists.size} task lists")
+            Log.d("TaskSelection", "Loaded ${tasksToShow.size} tasks and ${taskLists.size} task lists")
+            if (isTaskListMode) {
+                Log.d("TaskSelection", "Task list mode: $taskListId")
+            }
+        }
+    }
+
+    /**
+     * Check completion status for displayed tasks
+     */
+    private fun checkTaskCompletionStatus(tasks: Map<String, TaskConfig>) {
+        lifecycleScope.launch {
+            try {
+                val currentSession = SessionManager.currentSession.value
+                if (currentSession != null) {
+                    val sessionFile = SessionManager.getCurrentSessionFile()
+                    if (sessionFile != null && sessionFile.exists()) {
+                        // Convert task IDs to integers for FileManager
+                        val taskNumbers = tasks.keys.mapNotNull { taskId ->
+                            try {
+                                taskId.toInt()
+                            } catch (e: NumberFormatException) {
+                                Log.w("TaskSelection", "Invalid task ID format: $taskId")
+                                null
+                            }
+                        }
+
+                        if (taskNumbers.isNotEmpty()) {
+                            val completionStatus = fileManager.getTaskListCompletionStatus(sessionFile, taskNumbers)
+                            tasksAdapter.updateCompletionStatus(completionStatus)
+
+                            Log.d("TaskSelection", "Updated completion status for ${completionStatus.size} tasks")
+                            completionStatus.forEach { (taskNum, status) ->
+                                Log.d("TaskSelection", "  Task $taskNum: $status")
+                            }
+                        }
+                    } else {
+                        Log.d("TaskSelection", "No session file available for completion status")
+                    }
+                } else {
+                    Log.d("TaskSelection", "No active session for completion status")
+                }
+            } catch (e: Exception) {
+                Log.e("TaskSelection", "Failed to check task completion status", e)
+            }
         }
     }
 
@@ -129,8 +210,8 @@ class TaskSelectionActivity : AppCompatActivity() {
             binding.textNoTasks.visibility = View.VISIBLE
         }
 
-        // Show/hide task lists section
-        if (taskLists.isNotEmpty()) {
+        // Show/hide task lists section (hidden in task list mode)
+        if (taskLists.isNotEmpty() && !isTaskListMode) {
             binding.sectionTaskLists.visibility = View.VISIBLE
             binding.textNoTaskLists.visibility = View.GONE
         } else {
@@ -176,6 +257,10 @@ class TaskSelectionActivity : AppCompatActivity() {
             putExtra("TASK_TEXT", taskConfig.text)
             putExtra("TASK_TIMEOUT", taskConfig.timeoutSeconds)
             putExtra("IS_INDIVIDUAL_TASK", true)
+            // Pass task list context if we're in task list mode
+            if (isTaskListMode) {
+                putExtra("TASK_LIST_ID", taskListId)
+            }
         }
         startActivity(intent)
     }
@@ -229,18 +314,47 @@ class TaskSelectionActivity : AppCompatActivity() {
         return true
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Refresh task completion status when returning to this activity
+        lifecycleScope.launch {
+            val config = MasterConfigManager.getCurrentConfig()
+            if (config != null) {
+                val tasksToShow = if (isTaskListMode && taskListId != null) {
+                    val taskListConfig = config.baseConfig.taskLists[taskListId]
+                    if (taskListConfig != null) {
+                        val taskIds = taskListConfig.getTaskIds()
+                        config.baseConfig.tasks.filterKeys { it in taskIds }
+                    } else {
+                        config.baseConfig.tasks
+                    }
+                } else {
+                    config.baseConfig.tasks
+                }
+
+                checkTaskCompletionStatus(tasksToShow)
+            }
+        }
+    }
+
     /**
      * Adapter for individual tasks
-     * UPDATED: Now shows task number validation
+     * UPDATED: Now shows task completion status with visual indicators
      */
     private class TasksAdapter(
         private val onTaskClick: (String, TaskConfig) -> Unit
     ) : RecyclerView.Adapter<TasksAdapter.TaskViewHolder>() {
 
         private var tasks = mapOf<String, TaskConfig>()
+        private var completionStatus = mapOf<Int, FileManager.TaskCompletionStatus>()
 
         fun updateTasks(newTasks: Map<String, TaskConfig>) {
             tasks = newTasks.toSortedMap() // Sort by task ID
+            notifyDataSetChanged()
+        }
+
+        fun updateCompletionStatus(newStatus: Map<Int, FileManager.TaskCompletionStatus>) {
+            completionStatus = newStatus
             notifyDataSetChanged()
         }
 
@@ -252,7 +366,13 @@ class TaskSelectionActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: TaskViewHolder, position: Int) {
             val taskEntry = tasks.entries.elementAt(position)
-            holder.bind(taskEntry.key, taskEntry.value)
+            val taskNumberInt = try {
+                taskEntry.key.toInt()
+            } catch (e: NumberFormatException) {
+                null
+            }
+            val status = taskNumberInt?.let { completionStatus[it] }
+            holder.bind(taskEntry.key, taskEntry.value, status)
         }
 
         override fun getItemCount() = tasks.size
@@ -267,9 +387,54 @@ class TaskSelectionActivity : AppCompatActivity() {
             private val textDescription: TextView = itemView.findViewById(R.id.text_task_description)
             private val textTimeout: TextView = itemView.findViewById(R.id.text_task_timeout)
 
-            fun bind(taskId: String, taskConfig: TaskConfig) {
+            fun bind(taskId: String, taskConfig: TaskConfig, completionStatus: FileManager.TaskCompletionStatus?) {
                 // Show task number and label (e.g., "Task 1: Navigation Setup")
-                textTitle.text = "Task $taskId: ${taskConfig.label}"
+                var titleText = "Task $taskId: ${taskConfig.label}"
+
+                // Determine if task is completed (any end condition)
+                val isCompleted = when (completionStatus) {
+                    is FileManager.TaskCompletionStatus.Successful,
+                    is FileManager.TaskCompletionStatus.CompletedOther -> true
+                    else -> false
+                }
+
+                // Apply greyed out styling for completed tasks
+                if (isCompleted) {
+                    textTitle.alpha = 0.6f
+                    textDescription.alpha = 0.6f
+                    textTimeout.alpha = 0.6f
+                    cardView.alpha = 0.8f
+                } else {
+                    textTitle.alpha = 1.0f
+                    textDescription.alpha = 1.0f
+                    textTimeout.alpha = 1.0f
+                    cardView.alpha = 1.0f
+                }
+
+                // Add completion indicator to title
+                when (completionStatus) {
+                    is FileManager.TaskCompletionStatus.Successful -> {
+                        titleText += " ✓"
+                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_green_light)
+                        cardView.strokeWidth = 3
+                    }
+                    is FileManager.TaskCompletionStatus.CompletedOther -> {
+                        titleText += " (${completionStatus.endCondition})"
+                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_orange_light)
+                        cardView.strokeWidth = 3
+                    }
+                    is FileManager.TaskCompletionStatus.InProgress -> {
+                        titleText += " ⏳"
+                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_blue_light)
+                        cardView.strokeWidth = 2
+                    }
+                    else -> {
+                        // NotStarted or null - no indicator
+                        cardView.strokeWidth = 0
+                    }
+                }
+
+                textTitle.text = titleText
                 textDescription.text = taskConfig.text
                 textTimeout.text = "Timeout: ${taskConfig.timeoutSeconds}s"
 
@@ -282,11 +447,11 @@ class TaskSelectionActivity : AppCompatActivity() {
                 }
 
                 if (!isValidInteger) {
-                    textTitle.text = "Task $taskId: ${taskConfig.label} ⚠️ (Invalid ID)"
-                    cardView.strokeWidth = 3
-                    cardView.strokeColor = itemView.context.getColor(android.R.color.holo_red_light)
-                } else {
-                    cardView.strokeWidth = 0
+                    textTitle.text = "$titleText ⚠️ (Invalid ID)"
+                    if (cardView.strokeWidth == 0) {
+                        cardView.strokeWidth = 3
+                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_red_light)
+                    }
                 }
 
                 cardView.setOnClickListener {

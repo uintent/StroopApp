@@ -865,6 +865,36 @@ class FileManager(private val context: Context) {
     }
 
     /**
+     * Check which tasks in a list have been completed (have latest iteration with end condition)
+     * @param sessionFile Session file to check
+     * @param taskNumbers List of task numbers to check
+     * @return Map of taskNumber to completion status
+     */
+    fun getTaskListCompletionStatus(sessionFile: File, taskNumbers: List<Int>): Map<Int, TaskCompletionStatus> {
+        return try {
+            taskNumbers.associateWith { taskNumber ->
+                val latestIteration = getLatestTaskIteration(sessionFile, taskNumber)
+                when {
+                    latestIteration == null -> TaskCompletionStatus.NotStarted
+                    latestIteration.end_condition.isBlank() -> TaskCompletionStatus.InProgress
+                    latestIteration.end_condition == "Success" -> TaskCompletionStatus.Successful
+                    else -> TaskCompletionStatus.CompletedOther(latestIteration.end_condition)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get task completion status", e)
+            taskNumbers.associateWith { TaskCompletionStatus.NotStarted }
+        }
+    }
+
+    sealed class TaskCompletionStatus {
+        object NotStarted : TaskCompletionStatus()
+        object InProgress : TaskCompletionStatus()  // Has iterations but no end condition
+        object Successful : TaskCompletionStatus()
+        data class CompletedOther(val endCondition: String) : TaskCompletionStatus() // Failed, Given up, Timed out
+    }
+
+    /**
      * Reads session data from a file
      * @param sessionFile File to read from
      * @return Parsed session data
