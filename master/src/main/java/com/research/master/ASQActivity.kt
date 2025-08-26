@@ -14,10 +14,10 @@ import kotlinx.coroutines.launch
 
 /**
  * ASQActivity - After Scenario Questionnaire
- * UPDATED: Now uses Int task numbers with iteration counter support
+ * ENHANCED: Now supports task list context navigation
+ * Back navigation returns to TaskSummaryActivity, Continue navigation respects task list context
  * Displays two 7-point Likert scale questions for successful tasks
  * Updates existing task data in SessionManager with ASQ responses
- * Navigates to TaskSelectionActivity after completion
  */
 class ASQActivity : AppCompatActivity() {
 
@@ -25,12 +25,17 @@ class ASQActivity : AppCompatActivity() {
     private lateinit var fileManager: FileManager
 
     // Task information passed from TaskSummaryActivity - UPDATED
-    private var taskNumber: Int = 0               // NEW: Int task number
+    private var taskNumber: Int = 0               // Int task number
     private var taskId: String? = null            // Keep for display purposes
-    private var iterationCounter: Int = 0         // NEW: Iteration counter
+    private var iterationCounter: Int = 0         // Iteration counter
     private var taskLabel: String? = null
     private var sessionId: String? = null
     private var isIndividualTask: Boolean = true
+
+    // Task list context - NEW
+    private var taskListId: String? = null
+    private var taskListLabel: String? = null
+    private var isInTaskList: Boolean = false
 
     // ASQ responses (1-7 scale, 0 = not answered)
     private var asqEaseResponse: Int = 0  // 0 = not answered, 1-7 = selected value
@@ -66,12 +71,12 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Extract task data from TaskSummaryActivity intent
-     * UPDATED: Now extracts taskNumber and iterationCounter
+     * ENHANCED: Now extracts task list context for proper navigation
      */
     private fun extractIntentData() {
         Log.d("ASQActivity", "=== EXTRACTING INTENT DATA ===")
 
-        // UPDATED: Extract task number and iteration counter
+        // Extract task number and iteration counter
         taskNumber = intent.getIntExtra("TASK_NUMBER", 0)
         taskId = intent.getStringExtra("TASK_ID")
         iterationCounter = intent.getIntExtra("ITERATION_COUNTER", 0)
@@ -80,24 +85,31 @@ class ASQActivity : AppCompatActivity() {
         sessionId = intent.getStringExtra("SESSION_ID")
         isIndividualTask = intent.getBooleanExtra("IS_INDIVIDUAL_TASK", true)
 
+        // NEW: Extract task list context
+        taskListId = intent.getStringExtra("TASK_LIST_ID")
+        taskListLabel = intent.getStringExtra("TASK_LIST_LABEL")
+        isInTaskList = taskListId != null
+
         Log.d("ASQActivity", "Task Number: $taskNumber")
         Log.d("ASQActivity", "Task ID: $taskId")
         Log.d("ASQActivity", "Iteration Counter: $iterationCounter")
         Log.d("ASQActivity", "Task Label: $taskLabel")
         Log.d("ASQActivity", "Session ID: $sessionId")
         Log.d("ASQActivity", "Individual Task: $isIndividualTask")
+        Log.d("ASQActivity", "Task List ID: $taskListId")
+        Log.d("ASQActivity", "Is In Task List: $isInTaskList")
 
         Log.d("ASQActivity", "=== INTENT DATA EXTRACTION COMPLETE ===")
     }
 
     /**
      * Set up the UI with task information and questions
-     * UPDATED: Shows iteration information
+     * Shows iteration information
      */
     private fun setupUI() {
         Log.d("ASQActivity", "=== SETTING UP UI ===")
 
-        // Display task information - UPDATED to show iteration info
+        // Display task information - shows iteration info
         binding.textTaskTitle.text = taskLabel ?: getString(R.string.asq_unknown_task)
 
         val taskDisplayText = if (iterationCounter > 0) {
@@ -177,7 +189,7 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Save ASQ responses to SessionManager and continue
-     * UPDATED: Now uses taskNumber and iterationCounter
+     * ENHANCED: Context-aware navigation after saving
      */
     private fun saveASQDataAndContinue() {
         Log.d("ASQActivity", "=== SAVING ASQ DATA ===")
@@ -188,7 +200,7 @@ class ASQActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // UPDATED: Update the task with ASQ data using taskNumber and iterationCounter
+                // Update the task with ASQ data using taskNumber and iterationCounter
                 val asqData = mapOf(
                     "ease" to asqEaseResponse.toString(),
                     "time" to asqTimeResponse.toString()
@@ -204,7 +216,7 @@ class ASQActivity : AppCompatActivity() {
                     Snackbar.LENGTH_SHORT
                 ).show()
 
-                // Navigate to task selection after a brief delay
+                // Navigate after a brief delay with context awareness
                 binding.root.postDelayed({
                     navigateToTaskSelection()
                 }, 1000)
@@ -222,6 +234,7 @@ class ASQActivity : AppCompatActivity() {
 
     /**
      * Show confirmation dialog for skipping ASQ
+     * ENHANCED: Context-aware navigation after skipping
      */
     private fun showSkipConfirmationDialog() {
         androidx.appcompat.app.AlertDialog.Builder(this)
@@ -238,25 +251,78 @@ class ASQActivity : AppCompatActivity() {
     }
 
     /**
-     * Navigate to TaskSelectionActivity
+     * Navigate to TaskSummaryActivity (back navigation)
+     * NEW: Returns user to the task summary for revision/review
      */
-    private fun navigateToTaskSelection() {
-        Log.d("ASQActivity", "Navigating to TaskSelectionActivity")
+    private fun navigateBackToTaskSummary() {
+        Log.d("ASQActivity", "Navigating back to TaskSummaryActivity")
 
-        val intent = Intent(this, TaskSelectionActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        val intent = Intent(this, TaskSummaryActivity::class.java).apply {
+            // Pass all the original task data back
+            putExtra("TASK_NUMBER", taskNumber)
+            putExtra("TASK_ID", taskId)
+            putExtra("ITERATION_COUNTER", iterationCounter)
+            putExtra("TASK_LABEL", taskLabel)
+            putExtra("SESSION_ID", sessionId)
+            putExtra("IS_INDIVIDUAL_TASK", isIndividualTask)
+
+            // Pass task list context if applicable
+            if (isInTaskList) {
+                putExtra("TASK_LIST_ID", taskListId)
+                putExtra("TASK_LIST_LABEL", taskListLabel)
+            }
+
+            // Note: We don't have the full stroop data here, so TaskSummaryActivity
+            // will need to handle this case or we need to pass the data through
+            // For now, we'll use a flag to indicate this is a return from ASQ
+            putExtra("RETURNING_FROM_ASQ", true)
+        }
+
         startActivity(intent)
         finish()
     }
 
+    /**
+     * Navigate to TaskSelectionActivity with context awareness
+     * ENHANCED: Respects task list context for proper return navigation
+     */
+    private fun navigateToTaskSelection() {
+        Log.d("ASQActivity", "Navigating to TaskSelectionActivity with context")
+
+        val intent = Intent(this, TaskSelectionActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+
+            // If we're in task list mode, return to that specific task list
+            if (isInTaskList) {
+                putExtra("TASK_LIST_ID", taskListId)
+                putExtra("TASK_LIST_LABEL", taskListLabel)
+                Log.d("ASQActivity", "Returning to task list: $taskListId")
+            } else {
+                Log.d("ASQActivity", "Returning to global task selection")
+            }
+        }
+
+        startActivity(intent)
+        finish()
+    }
+
+    /**
+     * Handle toolbar back navigation - return to TaskSummaryActivity
+     * ENHANCED: Returns to task summary instead of task selection
+     */
     override fun onSupportNavigateUp(): Boolean {
-        // Navigate back to task selection (don't go back to TaskSummaryActivity)
-        navigateToTaskSelection()
+        Log.d("ASQActivity", "Back navigation pressed - returning to TaskSummaryActivity")
+        navigateBackToTaskSummary()
         return true
     }
 
+    /**
+     * Handle Android back button - return to TaskSummaryActivity
+     * ENHANCED: Returns to task summary instead of task selection
+     */
     override fun onBackPressed() {
-        super.onBackPressed()
-        navigateToTaskSelection()
+        Log.d("ASQActivity", "Back button pressed - returning to TaskSummaryActivity")
+        navigateBackToTaskSummary()
+        // No super call needed since navigateBackToTaskSummary() calls finish()
     }
 }

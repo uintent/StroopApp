@@ -23,9 +23,9 @@ import android.util.Log
 
 /**
  * Activity for selecting individual tasks or task lists
- * UPDATED: Now shows task completion status with visual indicators
+ * ENHANCED: Now supports task list mode - shows only tasks from a specific list in configured order
+ * Maintains task completion status with visual indicators
  * Tasks remain selectable regardless of completion status
- * Supports both global view and task list filtering (future enhancement)
  */
 class TaskSelectionActivity : AppCompatActivity() {
 
@@ -34,8 +34,9 @@ class TaskSelectionActivity : AppCompatActivity() {
     private lateinit var taskListsAdapter: TaskListsAdapter
     private lateinit var fileManager: FileManager
 
-    // Task list context (for future task list filtering)
+    // Task list context
     private var taskListId: String? = null
+    private var taskListLabel: String? = null
     private var isTaskListMode: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,18 +48,30 @@ class TaskSelectionActivity : AppCompatActivity() {
         // Initialize FileManager
         fileManager = FileManager(this)
 
-        // Check if we're in task list mode (future enhancement)
+        // Check if we're in task list mode
         taskListId = intent.getStringExtra("TASK_LIST_ID")
+        taskListLabel = intent.getStringExtra("TASK_LIST_LABEL")
         isTaskListMode = taskListId != null
 
         // Set up toolbar
         setSupportActionBar(binding.toolbar)
-        supportActionBar?.title = if (isTaskListMode) "Task List: $taskListId" else "Select Task"
+        supportActionBar?.title = if (isTaskListMode) {
+            taskListLabel ?: "Task List: $taskListId"
+        } else {
+            "Select Task"
+        }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        // Set up return to session manager button
+        // Set up return to session manager button - modify label in task list mode
+        if (isTaskListMode) {
+            binding.btnReturnToSessionManager.text = "Return to Task Lists"
+        }
         binding.btnReturnToSessionManager.setOnClickListener {
-            returnToSessionManager()
+            if (isTaskListMode) {
+                returnToTaskLists()
+            } else {
+                returnToSessionManager()
+            }
         }
 
         // Set up RecyclerViews
@@ -101,44 +114,78 @@ class TaskSelectionActivity : AppCompatActivity() {
                 return@launch
             }
 
-            // Load individual tasks
             val allTasks = config.baseConfig.tasks
 
-            // Filter tasks if we're in task list mode (future enhancement)
-            val tasksToShow = if (isTaskListMode && taskListId != null) {
-                val taskListConfig = config.baseConfig.taskLists[taskListId]
-                if (taskListConfig != null) {
-                    val taskIds = taskListConfig.getTaskIds()
-                    allTasks.filterKeys { it in taskIds }
-                } else {
-                    Log.w("TaskSelection", "Task list '$taskListId' not found in config")
-                    allTasks
-                }
+            if (isTaskListMode && taskListId != null) {
+                // Task list mode - show only tasks from the specified list in order
+                loadTaskListMode(allTasks)
             } else {
-                allTasks
-            }
-
-            tasksAdapter.updateTasks(tasksToShow)
-
-            // Load task lists (hide in task list mode)
-            val taskLists = if (isTaskListMode) {
-                emptyMap()
-            } else {
-                config.baseConfig.taskLists
-            }
-            taskListsAdapter.updateTaskLists(taskLists, allTasks)
-
-            // Check task completion status if we have an active session
-            checkTaskCompletionStatus(tasksToShow)
-
-            // Update UI visibility
-            updateSectionVisibility(tasksToShow, taskLists)
-
-            Log.d("TaskSelection", "Loaded ${tasksToShow.size} tasks and ${taskLists.size} task lists")
-            if (isTaskListMode) {
-                Log.d("TaskSelection", "Task list mode: $taskListId")
+                // Global mode - show all tasks and task lists
+                loadGlobalMode(allTasks, config.baseConfig.taskLists)
             }
         }
+    }
+
+    /**
+     * Load tasks for a specific task list in the order defined in the config
+     */
+    private suspend fun loadTaskListMode(allTasks: Map<String, TaskConfig>) {
+        val config = MasterConfigManager.getCurrentConfig()!!
+        val taskListConfig = config.baseConfig.taskLists[taskListId]
+
+        if (taskListConfig == null) {
+            Log.e("TaskSelection", "Task list '$taskListId' not found in config")
+            showConfigError("Task list '$taskListId' not found")
+            return
+        }
+
+        // Get task IDs in the order specified in the config
+        val taskIds = taskListConfig.getTaskIds()
+        Log.d("TaskSelection", "Task list '$taskListId' contains tasks: $taskIds")
+
+        // Create ordered map of tasks (LinkedHashMap preserves insertion order)
+        val orderedTasks = linkedMapOf<String, TaskConfig>()
+        taskIds.forEach { taskId ->
+            allTasks[taskId]?.let { taskConfig ->
+                orderedTasks[taskId] = taskConfig
+            } ?: run {
+                Log.w("TaskSelection", "Task '$taskId' from list '$taskListId' not found in config")
+            }
+        }
+
+        // Update adapter with ordered tasks
+        tasksAdapter.updateTasks(orderedTasks)
+
+        // Hide task lists section in task list mode
+        taskListsAdapter.updateTaskLists(emptyMap(), allTasks)
+
+        // Check completion status
+        checkTaskCompletionStatus(orderedTasks)
+
+        // Update UI visibility
+        updateSectionVisibility(orderedTasks, emptyMap())
+
+        Log.d("TaskSelection", "Task list mode: loaded ${orderedTasks.size} tasks from list '$taskListId'")
+    }
+
+    /**
+     * Load all tasks and task lists for global selection mode
+     */
+    private suspend fun loadGlobalMode(allTasks: Map<String, TaskConfig>, taskLists: Map<String, TaskListConfig>) {
+        // Show all tasks sorted by ID
+        val sortedTasks = allTasks.toSortedMap()
+        tasksAdapter.updateTasks(sortedTasks)
+
+        // Show all task lists
+        taskListsAdapter.updateTaskLists(taskLists, allTasks)
+
+        // Check completion status
+        checkTaskCompletionStatus(sortedTasks)
+
+        // Update UI visibility
+        updateSectionVisibility(sortedTasks, taskLists)
+
+        Log.d("TaskSelection", "Global mode: loaded ${sortedTasks.size} tasks and ${taskLists.size} task lists")
     }
 
     /**
@@ -231,7 +278,7 @@ class TaskSelectionActivity : AppCompatActivity() {
 
     /**
      * Handle individual task selection - go directly to Task Control Screen
-     * UPDATED: Converts String taskId to Int for FileManager compatibility
+     * UPDATED: Passes task list context when in task list mode
      */
     private fun onIndividualTaskSelected(taskId: String, taskConfig: TaskConfig) {
         Log.d("TaskSelection", "Individual task selected: $taskId - ${taskConfig.label}")
@@ -251,45 +298,47 @@ class TaskSelectionActivity : AppCompatActivity() {
 
         // Navigate to Task Control Screen (ColorDisplayActivity)
         val intent = Intent(this, ColorDisplayActivity::class.java).apply {
-            putExtra("TASK_NUMBER", taskNumber)  // CHANGED: Now passes Int instead of String
-            putExtra("TASK_ID", taskId)         // Keep String version for display purposes
+            putExtra("TASK_NUMBER", taskNumber)
+            putExtra("TASK_ID", taskId)
             putExtra("TASK_LABEL", taskConfig.label)
             putExtra("TASK_TEXT", taskConfig.text)
             putExtra("TASK_TIMEOUT", taskConfig.timeoutSeconds)
-            putExtra("IS_INDIVIDUAL_TASK", true)
+            putExtra("IS_INDIVIDUAL_TASK", !isTaskListMode) // False if part of a task list
             // Pass task list context if we're in task list mode
             if (isTaskListMode) {
                 putExtra("TASK_LIST_ID", taskListId)
+                putExtra("TASK_LIST_LABEL", taskListLabel)
             }
         }
         startActivity(intent)
     }
 
     /**
-     * Handle task list selection - go to Task List Management Screen
+     * Handle task list selection - navigate to task list view
+     * UPDATED: Now actually navigates to task list mode instead of showing placeholder
      */
     private fun onTaskListSelected(taskListId: String, taskListConfig: TaskListConfig) {
         Log.d("TaskSelection", "Task list selected: $taskListId - ${taskListConfig.label}")
 
-        // TODO: Navigate to Task List Management Screen (not implemented yet)
-        // For now, show a placeholder message
-        Snackbar.make(
-            binding.root,
-            "Task List: ${taskListConfig.label} (${taskListConfig.getTaskIds().size} tasks)\nTask List Management Screen - Coming Soon!",
-            Snackbar.LENGTH_LONG
-        ).show()
-
-        // TODO: When Task List Management Screen is ready:
-        // val intent = Intent(this, TaskListManagementActivity::class.java).apply {
-        //     putExtra("TASK_LIST_ID", taskListId)
-        //     putExtra("TASK_LIST_LABEL", taskListConfig.label)
-        //     putExtra("TASK_LIST_SEQUENCE", taskListConfig.taskSequence)
-        // }
-        // startActivity(intent)
+        // Navigate to the same activity but in task list mode
+        val intent = Intent(this, TaskSelectionActivity::class.java).apply {
+            putExtra("TASK_LIST_ID", taskListId)
+            putExtra("TASK_LIST_LABEL", taskListConfig.label)
+        }
+        startActivity(intent)
     }
 
     /**
-     * Return to Session Manager screen
+     * Return to main task lists view (when in task list mode)
+     */
+    private fun returnToTaskLists() {
+        Log.d("TaskSelection", "Returning to Task Lists")
+        // Simply finish this activity to return to the previous task selection screen
+        finish()
+    }
+
+    /**
+     * Return to Session Manager screen (when in global mode)
      */
     private fun returnToSessionManager() {
         Log.d("TaskSelection", "Returning to Session Manager")
@@ -310,7 +359,11 @@ class TaskSelectionActivity : AppCompatActivity() {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        if (isTaskListMode) {
+            returnToTaskLists()
+        } else {
+            returnToSessionManager()
+        }
         return true
     }
 
@@ -320,36 +373,42 @@ class TaskSelectionActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val config = MasterConfigManager.getCurrentConfig()
             if (config != null) {
-                val tasksToShow = if (isTaskListMode && taskListId != null) {
+                if (isTaskListMode && taskListId != null) {
                     val taskListConfig = config.baseConfig.taskLists[taskListId]
                     if (taskListConfig != null) {
                         val taskIds = taskListConfig.getTaskIds()
-                        config.baseConfig.tasks.filterKeys { it in taskIds }
-                    } else {
-                        config.baseConfig.tasks
+                        val orderedTasks = linkedMapOf<String, TaskConfig>()
+                        taskIds.forEach { taskId ->
+                            config.baseConfig.tasks[taskId]?.let { taskConfig ->
+                                orderedTasks[taskId] = taskConfig
+                            }
+                        }
+                        checkTaskCompletionStatus(orderedTasks)
                     }
                 } else {
-                    config.baseConfig.tasks
+                    checkTaskCompletionStatus(config.baseConfig.tasks)
                 }
-
-                checkTaskCompletionStatus(tasksToShow)
             }
         }
     }
 
     /**
      * Adapter for individual tasks
-     * UPDATED: Now shows task completion status with visual indicators
+     * ENHANCED: Shows task position in list when in task list mode
      */
     private class TasksAdapter(
         private val onTaskClick: (String, TaskConfig) -> Unit
     ) : RecyclerView.Adapter<TasksAdapter.TaskViewHolder>() {
 
-        private var tasks = mapOf<String, TaskConfig>()
+        private var tasks = linkedMapOf<String, TaskConfig>()
         private var completionStatus = mapOf<Int, FileManager.TaskCompletionStatus>()
 
         fun updateTasks(newTasks: Map<String, TaskConfig>) {
-            tasks = newTasks.toSortedMap() // Sort by task ID
+            tasks = if (newTasks is LinkedHashMap) {
+                LinkedHashMap(newTasks)
+            } else {
+                LinkedHashMap(newTasks.toSortedMap())
+            }
             notifyDataSetChanged()
         }
 
@@ -372,7 +431,7 @@ class TaskSelectionActivity : AppCompatActivity() {
                 null
             }
             val status = taskNumberInt?.let { completionStatus[it] }
-            holder.bind(taskEntry.key, taskEntry.value, status)
+            holder.bind(taskEntry.key, taskEntry.value, status, position + 1) // 1-based position
         }
 
         override fun getItemCount() = tasks.size
@@ -387,9 +446,9 @@ class TaskSelectionActivity : AppCompatActivity() {
             private val textDescription: TextView = itemView.findViewById(R.id.text_task_description)
             private val textTimeout: TextView = itemView.findViewById(R.id.text_task_timeout)
 
-            fun bind(taskId: String, taskConfig: TaskConfig, completionStatus: FileManager.TaskCompletionStatus?) {
-                // Show task number and label (e.g., "Task 1: Navigation Setup")
-                var titleText = "Task $taskId: ${taskConfig.label}"
+            fun bind(taskId: String, taskConfig: TaskConfig, completionStatus: FileManager.TaskCompletionStatus?, position: Int) {
+                // Show task number and label with position indicator in list mode
+                var titleText = "$position. Task $taskId: ${taskConfig.label}"
 
                 // Determine if task is completed (any end condition)
                 val isCompleted = when (completionStatus) {
@@ -462,7 +521,7 @@ class TaskSelectionActivity : AppCompatActivity() {
     }
 
     /**
-     * Adapter for task lists
+     * Adapter for task lists (only used in global mode)
      */
     private class TaskListsAdapter(
         private val onTaskListClick: (String, TaskListConfig) -> Unit
@@ -506,7 +565,7 @@ class TaskSelectionActivity : AppCompatActivity() {
                 val taskIds = taskListConfig.getTaskIds()
                 textTaskCount.text = "${taskIds.size} tasks"
 
-                // Show preview of task labels (now that tasks have proper labels)
+                // Show preview of task labels in order
                 val taskLabels = taskIds.take(3).mapNotNull { taskId ->
                     allTasks[taskId]?.label
                 }
