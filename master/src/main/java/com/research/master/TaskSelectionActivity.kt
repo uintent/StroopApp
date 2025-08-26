@@ -56,15 +56,15 @@ class TaskSelectionActivity : AppCompatActivity() {
         // Set up toolbar
         setSupportActionBar(binding.toolbar)
         supportActionBar?.title = if (isTaskListMode) {
-            taskListLabel ?: "Task List: $taskListId"
+            taskListLabel ?: getString(R.string.task_selection_task_list_title_format, taskListId ?: "")
         } else {
-            "Select Task"
+            getString(R.string.task_selection_title)
         }
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         // Set up return to session manager button - modify label in task list mode
         if (isTaskListMode) {
-            binding.btnReturnToSessionManager.text = "Return to Task Lists"
+            binding.btnReturnToSessionManager.text = getString(R.string.task_selection_return_to_task_lists)
         }
         binding.btnReturnToSessionManager.setOnClickListener {
             if (isTaskListMode) {
@@ -135,7 +135,7 @@ class TaskSelectionActivity : AppCompatActivity() {
 
         if (taskListConfig == null) {
             Log.e("TaskSelection", "Task list '$taskListId' not found in config")
-            showConfigError("Task list '$taskListId' not found")
+            showConfigError(getString(R.string.task_selection_config_error_format, "Task list '$taskListId' not found"))
             return
         }
 
@@ -290,7 +290,7 @@ class TaskSelectionActivity : AppCompatActivity() {
             Log.e("TaskSelection", "Invalid task ID format: $taskId, expected integer")
             Snackbar.make(
                 binding.root,
-                "Invalid task ID format: $taskId. Task IDs must be integers.",
+                getString(R.string.task_selection_invalid_task_id_format, taskId),
                 Snackbar.LENGTH_LONG
             ).show()
             return
@@ -353,7 +353,7 @@ class TaskSelectionActivity : AppCompatActivity() {
     private fun showConfigError(message: String = "Configuration error") {
         binding.scrollViewContent.visibility = View.GONE
         binding.textEmptyState.visibility = View.VISIBLE
-        binding.textEmptyState.text = "Error: $message\n\nPlease check configuration file."
+        binding.textEmptyState.text = getString(R.string.task_selection_config_error_format, message)
 
         Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
     }
@@ -447,8 +447,10 @@ class TaskSelectionActivity : AppCompatActivity() {
             private val textTimeout: TextView = itemView.findViewById(R.id.text_task_timeout)
 
             fun bind(taskId: String, taskConfig: TaskConfig, completionStatus: FileManager.TaskCompletionStatus?, position: Int) {
+                val context = itemView.context
+
                 // Show task number and label with position indicator in list mode
-                var titleText = "$position. Task $taskId: ${taskConfig.label}"
+                var titleText = context.getString(R.string.task_selection_task_position_format, position, taskId, taskConfig.label)
 
                 // Determine if task is completed (any end condition)
                 val isCompleted = when (completionStatus) {
@@ -473,18 +475,18 @@ class TaskSelectionActivity : AppCompatActivity() {
                 // Add completion indicator to title
                 when (completionStatus) {
                     is FileManager.TaskCompletionStatus.Successful -> {
-                        titleText += " ✓"
-                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_green_light)
+                        titleText += context.getString(R.string.task_selection_task_successful_indicator)
+                        cardView.strokeColor = context.getColor(android.R.color.holo_green_light)
                         cardView.strokeWidth = 3
                     }
                     is FileManager.TaskCompletionStatus.CompletedOther -> {
-                        titleText += " (${completionStatus.endCondition})"
-                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_orange_light)
+                        titleText += context.getString(R.string.task_selection_task_other_format, completionStatus.endCondition)
+                        cardView.strokeColor = context.getColor(android.R.color.holo_orange_light)
                         cardView.strokeWidth = 3
                     }
                     is FileManager.TaskCompletionStatus.InProgress -> {
-                        titleText += " ⏳"
-                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_blue_light)
+                        titleText += context.getString(R.string.task_selection_task_in_progress_indicator)
+                        cardView.strokeColor = context.getColor(android.R.color.holo_blue_light)
                         cardView.strokeWidth = 2
                     }
                     else -> {
@@ -495,7 +497,7 @@ class TaskSelectionActivity : AppCompatActivity() {
 
                 textTitle.text = titleText
                 textDescription.text = taskConfig.text
-                textTimeout.text = "Timeout: ${taskConfig.timeoutSeconds}s"
+                textTimeout.text = context.getString(R.string.task_selection_timeout_format, taskConfig.timeoutSeconds)
 
                 // Visual indicator if task ID is not a valid integer
                 val isValidInteger = try {
@@ -506,10 +508,10 @@ class TaskSelectionActivity : AppCompatActivity() {
                 }
 
                 if (!isValidInteger) {
-                    textTitle.text = "$titleText ⚠️ (Invalid ID)"
+                    textTitle.text = "$titleText ${context.getString(R.string.task_selection_task_invalid_id_warning)}"
                     if (cardView.strokeWidth == 0) {
                         cardView.strokeWidth = 3
-                        cardView.strokeColor = itemView.context.getColor(android.R.color.holo_red_light)
+                        cardView.strokeColor = context.getColor(android.R.color.holo_red_light)
                     }
                 }
 
@@ -560,19 +562,20 @@ class TaskSelectionActivity : AppCompatActivity() {
             private val textTaskPreview: TextView = itemView.findViewById(R.id.text_task_preview)
 
             fun bind(taskListId: String, taskListConfig: TaskListConfig, allTasks: Map<String, TaskConfig>) {
+                val context = itemView.context
                 textTitle.text = taskListConfig.label
 
                 val taskIds = taskListConfig.getTaskIds()
-                textTaskCount.text = "${taskIds.size} tasks"
+                textTaskCount.text = context.getString(R.string.task_selection_task_count_format, taskIds.size)
 
                 // Show preview of task labels in order
                 val taskLabels = taskIds.take(3).mapNotNull { taskId ->
                     allTasks[taskId]?.label
                 }
                 val preview = if (taskLabels.isNotEmpty()) {
-                    taskLabels.joinToString(", ") + if (taskIds.size > 3) "..." else ""
+                    taskLabels.joinToString(", ") + if (taskIds.size > 3) context.getString(R.string.task_selection_task_preview_more) else ""
                 } else {
-                    "No valid tasks found"
+                    context.getString(R.string.task_selection_no_valid_tasks)
                 }
                 textTaskPreview.text = preview
 

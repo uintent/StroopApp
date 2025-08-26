@@ -421,8 +421,8 @@ class TaskSummaryActivity : AppCompatActivity() {
                 val nextTaskLabel = nextTaskConfig?.label ?: "Task $nextTaskId"
 
                 androidx.appcompat.app.AlertDialog.Builder(this@TaskSummaryActivity)
-                    .setTitle("Task Complete")
-                    .setMessage("What would you like to do next?")
+                    .setTitle(getString(R.string.task_summary_task_complete_title))
+                    .setMessage(getString(R.string.task_summary_next_task_question))
                     .setPositiveButton(getString(R.string.task_summary_btn_continue_next_task)) { _, _ ->
                         navigateToNextTask()
                     }
@@ -482,7 +482,7 @@ class TaskSummaryActivity : AppCompatActivity() {
                 Log.e("TaskSummary", "Error navigating to next task", e)
                 Snackbar.make(
                     binding.root,
-                    "Failed to start next task: ${e.message}",
+                    getString(R.string.task_summary_next_task_failed_format, e.message),
                     Snackbar.LENGTH_LONG
                 ).show()
                 navigateToTaskSelection()

@@ -245,9 +245,110 @@
     <string name="color_display_log_total_responses">Total stroop responses: %1$d</string>
     <string name="color_display_log_time_on_task">Time on task: %1$dms</string>
 
+    <!-- Task Summary Activity -->
     <string name="task_summary_btn_to_asq">To ASQ</string>
     <string name="task_summary_btn_continue_next_task">Continue with Next Task</string>
     <string name="task_summary_btn_return_to_task_list">Return to Task List</string>
     <string name="task_summary_last_task_message">This was the last task in the list</string>
 
+    <!-- Settings Activity -->
+    <string name="settings_default_folder_name" translatable="false">StroopApp_Sessions</string>
+    <string name="settings_connection_prefs_key" translatable="false">connection_prefs</string>
+    <string name="settings_last_ip_key" translatable="false">last_ip</string>
+    <string name="settings_last_port_key" translatable="false">last_port</string>
+
+    <!-- Device Discovery Activity -->
+    <string name="device_discovery_title">Connect to Projector</string>
+    <string name="device_discovery_manual_device_format">Manual_%1$s_%2$d</string>
+    <string name="device_discovery_manual_team_id">Manual</string>
+    <string name="device_discovery_manual_device_id">Direct</string>
+    <string name="device_discovery_connected_success">Connected successfully!</string>
+    <string name="device_discovery_config_loaded">Configuration loaded</string>
+    <string name="device_discovery_config_ready">Configuration ready</string>
+    <string name="device_discovery_connection_failed_format">Failed to connect to %1$s:%2$d</string>
+    <string name="device_discovery_connection_error_format">Connection error: %1$s</string>
+    <string name="device_discovery_not_connected">Not connected</string>
+    <string name="device_discovery_searching">Searching for devices...</string>
+    <string name="device_discovery_connecting">Connecting...</string>
+    <string name="device_discovery_connected">Connected</string>
+    <string name="device_discovery_connection_error">Connection error</string>
+    <string name="device_discovery_connection_failed">Connection failed</string>
+    <string name="device_discovery_ip_required">Please enter an IP address</string>
+    <string name="device_discovery_port_required">Please enter a port number</string>
+    <string name="device_discovery_ip_invalid">Invalid IP address format</string>
+    <string name="device_discovery_port_invalid">Invalid port number</string>
+    <string name="device_discovery_port_range_invalid">Port must be between 1 and 65535</string>
+    <string name="device_discovery_config_error_title">Configuration Error</string>
+    <string name="device_discovery_config_error_message">Failed to load application configuration. Please check that research_config.json is properly formatted.</string>
+    <string name="device_discovery_config_not_ready_title">Configuration Not Ready</string>
+    <string name="device_discovery_config_not_ready_message">Configuration is still loading or failed to load. Please wait or retry configuration loading.</string>
+    <string name="device_discovery_retry_config">Retry Config</string>
+    <string name="device_discovery_reloading_config">Reloading configuration...</string>
+    <string name="device_discovery_config_reloaded">Configuration reloaded successfully</string>
+    <string name="device_discovery_permission_required">Location permission is required for device discovery</string>
+    <string name="device_discovery_retry">Retry</string>
+    <string name="device_discovery_exit">Exit</string>
+    <string name="device_discovery_cancel">Cancel</string>
+    <string name="device_discovery_resolving">Resolving...</string>
+
+    <!-- Main Session Activity -->
+    <string name="main_session_title">Research Session Manager</string>
+    <string name="main_session_incomplete_session_info">Incomplete Session Found:\nParticipant: %1$s\nID: %2$s\nTasks completed: %3$d\nStatus: %4$s</string>
+    <string name="main_session_end_save_title">End &amp; Save Session</string>
+    <string name="main_session_end_save_message">This will end the current session and save all data to a JSON file.\n\nParticipant: %1$s\nTasks completed: %2$d\n\nThis action cannot be undone. Continue?</string>
+    <string name="main_session_end_save_button">End &amp; Save Session</string>
+    <string name="main_session_discard_title">Discard Session</string>
+    <string name="main_session_discard_message">This will permanently delete the current session data without saving.\n\nParticipant: %1$s\nTasks completed: %2$d\n\n⚠️ This action cannot be undone. All session data will be lost.</string>
+    <string name="main_session_discard_button">Discard Session</string>
+    <string name="main_session_saving">Saving session...</string>
+    <string name="main_session_discarding">Discarding session...</string>
+    <string name="main_session_saved_success">Session ended and saved successfully!</string>
+    <string name="main_session_discarded_success">Session discarded successfully</string>
+    <string name="main_session_connected_format">Connected to Projector\nSession ID: %1$s</string>
+    <string name="main_session_connection_error">Connection Error - Please reconnect</string>
+    <string name="main_session_disconnect_title">Disconnect from Projector</string>
+    <string name="main_session_disconnect_message">This will disconnect from the projector and return to the connection screen. Any unsaved session data will be preserved.</string>
+    <string name="main_session_disconnect_button">Disconnect</string>
+    <string name="main_session_connection_lost_title">Connection Error</string>
+    <string name="main_session_connection_lost_message">The connection to the projector has been lost. Would you like to return to the connection screen?</string>
+    <string name="main_session_reconnect">Reconnect</string>
+    <string name="main_session_new_session_title">Start New Session</string>
+    <string name="main_session_new_session_message">You have an active session that needs to be handled first.\n\nParticipant: %1$s\nTasks completed: %2$d\n\nWhat would you like to do with the current session?</string>
+    <string name="main_session_new_session_saving">Saving session...</string>
+    <string name="main_session_new_session_discarding">Discarding session...</string>
+    <string name="main_session_resume_incomplete">Resume Incomplete Session</string>
+    <string name="main_session_no_session_resume">No Session to Resume</string>
+    <string name="main_session_status_in_progress">In Progress</string>
+    <string name="main_session_status_completed">Completed</string>
+    <string name="main_session_status_interrupted">Interrupted</string>
+    <string name="main_session_session_ended_already">This session has already been ended (flag=%1$d). Please start a new session.</string>
+    <string name="main_session_session_discarded_already">This session has been discarded (flag=%1$d). Please start a new session.</string>
+    <string name="main_session_error_format">Error %1$s session: %2$s</string>
+    <string name="main_session_error_ending">ending</string>
+    <string name="main_session_error_discarding">discarding</string>
+    <string name="main_session_error_starting">starting new session</string>
+    <string name="main_session_error_resuming">resuming session</string>
+    <string name="main_session_error_checking">checking session status</string>
+    <string name="main_session_btn_new_session">Start New Session</string>
+
+    <!-- Task Selection Activity -->
+    <string name="task_selection_title">Select Task</string>
+    <string name="task_selection_task_list_title_format">Task List: %1$s</string>
+    <string name="task_selection_return_to_task_lists">Return to Task Lists</string>
+    <string name="task_selection_config_error_format">Error: %1$s\n\nPlease check configuration file.</string>
+    <string name="task_selection_invalid_task_id_format">Invalid task ID format: %1$s. Task IDs must be integers.</string>
+    <string name="task_selection_task_position_format">%1$d. Task %2$s: %3$s</string>
+    <string name="task_selection_task_successful_indicator"> ✓</string>
+    <string name="task_selection_task_other_format"> (%1$s)</string>
+    <string name="task_selection_task_in_progress_indicator"> ⏳</string>
+    <string name="task_selection_task_invalid_id_warning"> ⚠️ (Invalid ID)</string>
+    <string name="task_selection_timeout_format">Timeout: %1$ds</string>
+    <string name="task_selection_task_count_format">%1$d tasks</string>
+    <string name="task_selection_no_valid_tasks">No valid tasks found</string>
+    <string name="task_selection_task_preview_more">...</string>
+
+    <!-- Task Summary Activity -->
+    <string name="task_summary_task_complete_title">Task Complete</string>
+    <string name="task_summary_next_task_question">What would you like to do next?</string>
+    <string name="task_summary_next_task_failed_format">Failed to start next task: %1$s</string>
 </resources>

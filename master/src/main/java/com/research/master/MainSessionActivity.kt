@@ -32,7 +32,7 @@ class MainSessionActivity : AppCompatActivity() {
 
         // Set up toolbar
         setSupportActionBar(binding.toolbar)
-        binding.toolbar.title = "Research Session Manager"
+        binding.toolbar.title = getString(R.string.main_session_title)
 
         // Initialize SessionManager
         SessionManager.initialize(this)
@@ -120,7 +120,7 @@ class MainSessionActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 Log.e("MainSession", "Error checking for existing session", e)
-                showError("Error checking session status: ${e.message}")
+                showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_checking), e.message))
             }
         }
     }
@@ -135,17 +135,17 @@ class MainSessionActivity : AppCompatActivity() {
             Log.d("MainSession", "Showing session UI for: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
 
             binding.layoutExistingSession.visibility = android.view.View.VISIBLE
-            binding.textExistingSessionInfo.text = buildString {
-                append("Incomplete Session Found:\n")
-                append("Participant: ${sessionData.participantName}\n")
-                append("ID: ${sessionData.participantId}\n")
-                append("Tasks completed: ${sessionData.tasks.size}\n")
-                append("Status: ${getSessionStatusDisplay(sessionData.sessionStatus)}")
-            }
+            binding.textExistingSessionInfo.text = getString(
+                R.string.main_session_incomplete_session_info,
+                sessionData.participantName,
+                sessionData.participantId,
+                sessionData.tasks.size,
+                getSessionStatusDisplay(sessionData.sessionStatus)
+            )
 
             // Enable resume button for incomplete sessions
             binding.btnResumeSession.isEnabled = true
-            binding.btnResumeSession.text = "Resume Incomplete Session"
+            binding.btnResumeSession.text = getString(R.string.main_session_resume_incomplete)
 
             // Show end session button for incomplete sessions
             binding.btnEndSession.visibility = android.view.View.VISIBLE
@@ -157,7 +157,7 @@ class MainSessionActivity : AppCompatActivity() {
             // No incomplete session - hide resume and end session options
             binding.layoutExistingSession.visibility = android.view.View.GONE
             binding.btnResumeSession.isEnabled = false
-            binding.btnResumeSession.text = "No Session to Resume"
+            binding.btnResumeSession.text = getString(R.string.main_session_no_session_resume)
             binding.btnEndSession.visibility = android.view.View.GONE
             binding.btnDiscardSession.visibility = android.view.View.GONE
 
@@ -181,12 +181,16 @@ class MainSessionActivity : AppCompatActivity() {
         val sessionData = currentSessionData ?: return
 
         AlertDialog.Builder(this)
-            .setTitle("End & Save Session")
-            .setMessage("This will end the current session and save all data to a JSON file.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\nThis action cannot be undone. Continue?")
-            .setPositiveButton("End & Save Session") { _, _ ->
+            .setTitle(getString(R.string.main_session_end_save_title))
+            .setMessage(getString(
+                R.string.main_session_end_save_message,
+                sessionData.participantName,
+                sessionData.tasks.size
+            ))
+            .setPositiveButton(getString(R.string.main_session_end_save_button)) { _, _ ->
                 endAndSaveSession()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -199,12 +203,16 @@ class MainSessionActivity : AppCompatActivity() {
         val sessionData = currentSessionData ?: return
 
         AlertDialog.Builder(this)
-            .setTitle("Discard Session")
-            .setMessage("This will permanently delete the current session data without saving.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\n⚠️ This action cannot be undone. All session data will be lost.")
-            .setPositiveButton("Discard Session") { _, _ ->
+            .setTitle(getString(R.string.main_session_discard_title))
+            .setMessage(getString(
+                R.string.main_session_discard_message,
+                sessionData.participantName,
+                sessionData.tasks.size
+            ))
+            .setPositiveButton(getString(R.string.main_session_discard_button)) { _, _ ->
                 discardSession()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -222,7 +230,7 @@ class MainSessionActivity : AppCompatActivity() {
                 binding.btnNewSession.isEnabled = false
 
                 // Show progress in the button text
-                binding.btnEndSession.text = "Saving session..."
+                binding.btnEndSession.text = getString(R.string.main_session_saving)
 
                 // End the session (this will save to JSON file)
                 SessionManager.endSession()
@@ -237,7 +245,7 @@ class MainSessionActivity : AppCompatActivity() {
                 // Show success message
                 Snackbar.make(
                     binding.root,
-                    "Session ended and saved successfully!",
+                    getString(R.string.main_session_saved_success),
                     Snackbar.LENGTH_LONG
                 ).show()
 
@@ -250,9 +258,9 @@ class MainSessionActivity : AppCompatActivity() {
                 binding.btnEndSession.isEnabled = true
                 binding.btnResumeSession.isEnabled = true
                 binding.btnNewSession.isEnabled = true
-                binding.btnEndSession.text = "End & Save Session"
+                binding.btnEndSession.text = getString(R.string.main_session_end_save_button)
 
-                showError("Error saving session: ${e.message}")
+                showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_ending), e.message))
             }
         }
     }
@@ -270,7 +278,7 @@ class MainSessionActivity : AppCompatActivity() {
                 binding.btnNewSession.isEnabled = false
 
                 // Show progress in the button text
-                binding.btnDiscardSession.text = "Discarding session..."
+                binding.btnDiscardSession.text = getString(R.string.main_session_discarding)
 
                 // Clear the session without saving
                 SessionManager.clearSession()
@@ -285,7 +293,7 @@ class MainSessionActivity : AppCompatActivity() {
                 // Show success message
                 Snackbar.make(
                     binding.root,
-                    "Session discarded successfully",
+                    getString(R.string.main_session_discarded_success),
                     Snackbar.LENGTH_LONG
                 ).show()
 
@@ -299,18 +307,18 @@ class MainSessionActivity : AppCompatActivity() {
                 binding.btnResumeSession.isEnabled = true
                 binding.btnEndSession.isEnabled = true
                 binding.btnNewSession.isEnabled = true
-                binding.btnDiscardSession.text = "Discard Session (No Save)"
+                binding.btnDiscardSession.text = getString(R.string.main_session_discard_button)
 
-                showError("Error discarding session: ${e.message}")
+                showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_discarding), e.message))
             }
         }
     }
 
     private fun getSessionStatusDisplay(status: String): String {
         return when (status) {
-            "in_progress" -> "In Progress"
-            "completed_normally" -> "Completed"
-            "interrupted" -> "Interrupted"
+            "in_progress" -> getString(R.string.main_session_status_in_progress)
+            "completed_normally" -> getString(R.string.main_session_status_completed)
+            "interrupted" -> getString(R.string.main_session_status_interrupted)
             else -> status.replaceFirstChar { it.uppercase() }
         }
     }
@@ -323,14 +331,17 @@ class MainSessionActivity : AppCompatActivity() {
         val sessionId = NetworkManager.getCurrentSessionId()
 
         if (isConnected && !sessionId.isNullOrEmpty()) {
-            binding.textConnectionStatus.text = "Connected to Projector\nSession ID: ${sessionId.take(8)}..."
+            binding.textConnectionStatus.text = getString(
+                R.string.main_session_connected_format,
+                sessionId.take(8) + "..."
+            )
             binding.textConnectionStatus.setTextColor(getColor(android.R.color.holo_green_dark))
 
             // Enable session buttons
             binding.btnNewSession.isEnabled = true
 
         } else {
-            binding.textConnectionStatus.text = "Connection Error - Please reconnect"
+            binding.textConnectionStatus.text = getString(R.string.main_session_connection_error)
             binding.textConnectionStatus.setTextColor(getColor(android.R.color.holo_red_dark))
 
             // Disable session buttons
@@ -358,7 +369,7 @@ class MainSessionActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 Log.e("MainSession", "Error starting new session", e)
-                showError("Error starting new session: ${e.message}")
+                showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_starting), e.message))
             }
         }
     }
@@ -372,12 +383,12 @@ class MainSessionActivity : AppCompatActivity() {
 
         // Double-check the session is actually incomplete using explicit flag checks
         if (sessionData.ended != 0) {
-            showError("This session has already been ended (flag=${sessionData.ended}). Please start a new session.")
+            showError(getString(R.string.main_session_session_ended_already, sessionData.ended))
             return
         }
 
         if (sessionData.discarded != 0) {
-            showError("This session has been discarded (flag=${sessionData.discarded}). Please start a new session.")
+            showError(getString(R.string.main_session_session_discarded_already, sessionData.discarded))
             return
         }
 
@@ -401,7 +412,7 @@ class MainSessionActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 Log.e("MainSession", "Error resuming session", e)
-                showError("Error resuming session: ${e.message}")
+                showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_resuming), e.message))
             }
         }
     }
@@ -433,15 +444,19 @@ class MainSessionActivity : AppCompatActivity() {
         val sessionData = currentSessionData ?: return
 
         AlertDialog.Builder(this)
-            .setTitle("Start New Session")
-            .setMessage("You have an active session that needs to be handled first.\n\nParticipant: ${sessionData.participantName}\nTasks completed: ${sessionData.tasks.size}\n\nWhat would you like to do with the current session?")
-            .setPositiveButton("End & Save Session") { _, _ ->
+            .setTitle(getString(R.string.main_session_new_session_title))
+            .setMessage(getString(
+                R.string.main_session_new_session_message,
+                sessionData.participantName,
+                sessionData.tasks.size
+            ))
+            .setPositiveButton(getString(R.string.main_session_end_save_button)) { _, _ ->
                 handleCurrentSessionBeforeNew(endSession = true)
             }
-            .setNeutralButton("Discard Session") { _, _ ->
+            .setNeutralButton(getString(R.string.main_session_discard_button)) { _, _ ->
                 handleCurrentSessionBeforeNew(endSession = false)
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -452,12 +467,12 @@ class MainSessionActivity : AppCompatActivity() {
      */
     private fun showDisconnectConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Disconnect from Projector")
-            .setMessage("This will disconnect from the projector and return to the connection screen. Any unsaved session data will be preserved.")
-            .setPositiveButton("Disconnect") { _, _ ->
+            .setTitle(getString(R.string.main_session_disconnect_title))
+            .setMessage(getString(R.string.main_session_disconnect_message))
+            .setPositiveButton(getString(R.string.main_session_disconnect_button)) { _, _ ->
                 disconnectAndReturn()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -468,12 +483,12 @@ class MainSessionActivity : AppCompatActivity() {
      */
     private fun showConnectionError() {
         AlertDialog.Builder(this)
-            .setTitle("Connection Error")
-            .setMessage("The connection to the projector has been lost. Would you like to return to the connection screen?")
-            .setPositiveButton("Reconnect") { _, _ ->
+            .setTitle(getString(R.string.main_session_connection_lost_title))
+            .setMessage(getString(R.string.main_session_connection_lost_message))
+            .setPositiveButton(getString(R.string.main_session_reconnect)) { _, _ ->
                 returnToConnection()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -524,7 +539,7 @@ class MainSessionActivity : AppCompatActivity() {
             try {
                 // Disable new session button during operation
                 binding.btnNewSession.isEnabled = false
-                binding.btnNewSession.text = if (endSession) "Saving session..." else "Discarding session..."
+                binding.btnNewSession.text = if (endSession) getString(R.string.main_session_new_session_saving) else getString(R.string.main_session_new_session_discarding)
 
                 if (endSession) {
                     // End current session and save data
@@ -548,10 +563,10 @@ class MainSessionActivity : AppCompatActivity() {
 
                 // Re-enable button and restore text
                 binding.btnNewSession.isEnabled = true
-                binding.btnNewSession.text = "Start New Session"
+                binding.btnNewSession.text = getString(R.string.main_session_btn_new_session)
 
-                val action = if (endSession) "saving" else "discarding"
-                showError("Error $action current session: ${e.message}")
+                val action = if (endSession) getString(R.string.main_session_error_ending) else getString(R.string.main_session_error_discarding)
+                showError(getString(R.string.main_session_error_format, action, e.message))
             }
         }
     }

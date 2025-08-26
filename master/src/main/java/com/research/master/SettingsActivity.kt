@@ -100,7 +100,7 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun getDefaultExportFolder(): String {
         return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            "StroopApp_Sessions").absolutePath
+            getString(R.string.settings_default_folder_name)).absolutePath
     }
 
     /**

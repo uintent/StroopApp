@@ -55,7 +55,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Set up toolbar
-        binding.toolbar.title = "Connect to Projector"
+        binding.toolbar.title = getString(R.string.device_discovery_title)
 
         // Initialize configuration manager
         MasterConfigManager.initialize(this)
@@ -131,7 +131,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 showConfigurationError()
             } else {
                 Log.d("MasterConfig", "Configuration loaded successfully")
-                updateConfigStatus("Configuration loaded")
+                updateConfigStatus(getString(R.string.device_discovery_config_loaded))
             }
         }
     }
@@ -174,7 +174,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                         updateConfigStatus("Loading configuration...")
                     }
                     is MasterConfigManager.ConfigState.Loaded -> {
-                        updateConfigStatus("Configuration ready")
+                        updateConfigStatus(getString(R.string.device_discovery_config_ready))
                     }
                     is MasterConfigManager.ConfigState.Error -> {
                         updateConfigStatus("Config error: ${configState.message}")
@@ -225,12 +225,12 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
         // Validate input
         if (ipAddress.isNullOrEmpty()) {
-            binding.layoutIpAddress.error = "Please enter an IP address"
+            binding.layoutIpAddress.error = getString(R.string.device_discovery_ip_required)
             return
         }
 
         if (portText.isNullOrEmpty()) {
-            binding.layoutPort.error = "Please enter a port number"
+            binding.layoutPort.error = getString(R.string.device_discovery_port_required)
             return
         }
 
@@ -240,7 +240,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
         // Validate IP address format
         if (!isValidIpAddress(ipAddress)) {
-            binding.layoutIpAddress.error = "Invalid IP address format"
+            binding.layoutIpAddress.error = getString(R.string.device_discovery_ip_invalid)
             return
         }
 
@@ -248,13 +248,13 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         val port = try {
             portText.toInt()
         } catch (e: NumberFormatException) {
-            binding.layoutPort.error = "Invalid port number"
+            binding.layoutPort.error = getString(R.string.device_discovery_port_invalid)
             return
         }
 
         // Validate port range
         if (port !in 1..65535) {
-            binding.layoutPort.error = "Port must be between 1 and 65535"
+            binding.layoutPort.error = getString(R.string.device_discovery_port_range_invalid)
             return
         }
 
@@ -269,9 +269,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
         // Create manual device entry
         val manualDevice = MasterNetworkClient.DiscoveredDevice(
-            serviceName = "Manual_${ipAddress}_$port",
-            teamId = "Manual",
-            deviceId = "Direct",
+            serviceName = getString(R.string.device_discovery_manual_device_format, ipAddress, port),
+            teamId = getString(R.string.device_discovery_manual_team_id),
+            deviceId = getString(R.string.device_discovery_manual_device_id),
             host = ipAddress,
             port = port,
             isResolved = true
@@ -301,7 +301,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     // Show success message
                     Snackbar.make(
                         binding.root,
-                        "Connected successfully!",
+                        getString(R.string.device_discovery_connected_success),
                         Snackbar.LENGTH_SHORT
                     ).show()
 
@@ -313,7 +313,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     Log.e("MasterNetwork", "Manual connection failed")
                     Snackbar.make(
                         binding.root,
-                        "Failed to connect to $ipAddress:$port",
+                        getString(R.string.device_discovery_connection_failed_format, ipAddress, port),
                         Snackbar.LENGTH_LONG
                     ).show()
                 }
@@ -321,7 +321,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 Log.e("MasterNetwork", "Connection attempt failed", e)
                 Snackbar.make(
                     binding.root,
-                    "Connection error: ${e.message}",
+                    getString(R.string.device_discovery_connection_error_format, e.message),
                     Snackbar.LENGTH_LONG
                 ).show()
             }
@@ -349,9 +349,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      * Save last successful connection
      */
     private fun saveLastConnection(ip: String, port: Int) {
-        getSharedPreferences("connection_prefs", MODE_PRIVATE).edit().apply {
-            putString("last_ip", ip)
-            putInt("last_port", port)
+        getSharedPreferences(getString(R.string.settings_connection_prefs_key), MODE_PRIVATE).edit().apply {
+            putString(getString(R.string.settings_last_ip_key), ip)
+            putInt(getString(R.string.settings_last_port_key), port)
             apply()
         }
     }
@@ -360,9 +360,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      * Load last connection from preferences
      */
     private fun loadLastConnection() {
-        val prefs = getSharedPreferences("connection_prefs", MODE_PRIVATE)
-        val lastIp = prefs.getString("last_ip", "")
-        val lastPort = prefs.getInt("last_port", 0)
+        val prefs = getSharedPreferences(getString(R.string.settings_connection_prefs_key), MODE_PRIVATE)
+        val lastIp = prefs.getString(getString(R.string.settings_last_ip_key), "")
+        val lastPort = prefs.getInt(getString(R.string.settings_last_port_key), 0)
 
         if (!lastIp.isNullOrEmpty() && lastPort > 0) {
             binding.etIpAddress.setText(lastIp)
@@ -377,29 +377,29 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         when (state) {
             MasterNetworkClient.ConnectionState.DISCONNECTED -> {
                 binding.progressBar.visibility = View.GONE
-                binding.textStatus.text = "Not connected"
+                binding.textStatus.text = getString(R.string.device_discovery_not_connected)
                 binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
             }
             MasterNetworkClient.ConnectionState.DISCOVERING -> {
                 binding.progressBar.visibility = View.VISIBLE
-                binding.textStatus.text = "Searching for devices..."
+                binding.textStatus.text = getString(R.string.device_discovery_searching)
                 binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
             }
             MasterNetworkClient.ConnectionState.CONNECTING -> {
                 binding.progressBar.visibility = View.VISIBLE
-                binding.textStatus.text = "Connecting..."
+                binding.textStatus.text = getString(R.string.device_discovery_connecting)
                 binding.btnManualConnect.isEnabled = false
             }
             MasterNetworkClient.ConnectionState.CONNECTED -> {
                 binding.progressBar.visibility = View.GONE
-                binding.textStatus.text = "Connected"
+                binding.textStatus.text = getString(R.string.device_discovery_connected)
                 binding.btnManualConnect.isEnabled = false
             }
             MasterNetworkClient.ConnectionState.ERROR -> {
                 binding.progressBar.visibility = View.GONE
-                binding.textStatus.text = "Connection error"
+                binding.textStatus.text = getString(R.string.device_discovery_connection_error)
                 binding.btnManualConnect.isEnabled = MasterConfigManager.isConfigurationReady()
-                Snackbar.make(binding.root, "Connection failed", Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, getString(R.string.device_discovery_connection_failed), Snackbar.LENGTH_LONG).show()
             }
         }
     }
@@ -478,7 +478,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 Log.e("MasterNetwork", "Connection failed", e)
                 Snackbar.make(
                     binding.root,
-                    "Connection failed: ${e.message}",
+                    getString(R.string.device_discovery_connection_error_format, e.message),
                     Snackbar.LENGTH_LONG
                 ).show()
             }
@@ -519,12 +519,12 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      */
     private fun showConfigurationError() {
         AlertDialog.Builder(this)
-            .setTitle("Configuration Error")
-            .setMessage("Failed to load application configuration. Please check that research_config.json is properly formatted.")
-            .setPositiveButton("Retry") { _, _ ->
+            .setTitle(getString(R.string.device_discovery_config_error_title))
+            .setMessage(getString(R.string.device_discovery_config_error_message))
+            .setPositiveButton(getString(R.string.device_discovery_retry)) { _, _ ->
                 reloadConfiguration()
             }
-            .setNegativeButton("Exit") { _, _ ->
+            .setNegativeButton(getString(R.string.device_discovery_exit)) { _, _ ->
                 finish()
             }
             .setCancelable(false)
@@ -536,12 +536,12 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      */
     private fun showConfigurationNotReadyDialog() {
         AlertDialog.Builder(this)
-            .setTitle("Configuration Not Ready")
-            .setMessage("Configuration is still loading or failed to load. Please wait or retry configuration loading.")
-            .setPositiveButton("Retry Config") { _, _ ->
+            .setTitle(getString(R.string.device_discovery_config_not_ready_title))
+            .setMessage(getString(R.string.device_discovery_config_not_ready_message))
+            .setPositiveButton(getString(R.string.device_discovery_retry_config)) { _, _ ->
                 reloadConfiguration()
             }
-            .setNegativeButton("Cancel") { dialog, _ ->
+            .setNegativeButton(getString(R.string.device_discovery_cancel)) { dialog, _ ->
                 dialog.dismiss()
             }
             .show()
@@ -552,10 +552,10 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      */
     private fun reloadConfiguration() {
         lifecycleScope.launch {
-            updateConfigStatus("Reloading configuration...")
+            updateConfigStatus(getString(R.string.device_discovery_reloading_config))
             val success = MasterConfigManager.reloadConfiguration()
             if (success) {
-                updateConfigStatus("Configuration reloaded successfully")
+                updateConfigStatus(getString(R.string.device_discovery_config_reloaded))
             } else {
                 showConfigurationError()
             }
@@ -568,7 +568,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
     private fun showPermissionError() {
         Snackbar.make(
             binding.root,
-            "Location permission is required for device discovery",
+            getString(R.string.device_discovery_permission_required),
             Snackbar.LENGTH_LONG
         ).show()
     }
@@ -619,7 +619,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                 textInfo.text = if (device.isResolved) {
                     "${device.host}:${device.port}"
                 } else {
-                    "Resolving..."
+                    itemView.context.getString(R.string.device_discovery_resolving)
                 }
 
                 itemView.setOnClickListener {
