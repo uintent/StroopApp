@@ -38,6 +38,22 @@ class TaskControlNetworkManager(
         return try {
             DebugLogger.d("TaskControl", "Starting task: $taskId with timeout: ${taskTimeoutMs}ms")
 
+            // DEBUG: Check if RuntimeConfig is provided
+            DebugLogger.d("TaskControl", "RuntimeConfig provided: ${runtimeConfig != null}")
+            if (runtimeConfig != null) {
+                DebugLogger.d("TaskControl", "BaseConfig available: ${runtimeConfig.baseConfig != null}")
+                val colorWords = runtimeConfig.baseConfig?.getColorWords()
+                DebugLogger.d("TaskControl", "Color words from config: $colorWords")
+                DebugLogger.d("TaskControl", "Color words count: ${colorWords?.size ?: 0}")
+
+                // DEBUG: Check actual color mappings too
+                val stroopColors = runtimeConfig.baseConfig?.stroopColors
+                DebugLogger.d("TaskControl", "Stroop colors from config: $stroopColors")
+                DebugLogger.d("TaskControl", "Stroop colors count: ${stroopColors?.size ?: 0}")
+            } else {
+                DebugLogger.w("TaskControl", "RuntimeConfig is NULL - will use hardcoded fallback colors")
+            }
+
             // Create timing parameters from config or defaults
             val timing = runtimeConfig?.getEffectiveTiming() ?: run {
                 DebugLogger.w("TaskControl", "No runtime config provided, using defaults")
@@ -48,6 +64,12 @@ class TaskControlNetworkManager(
                     countdownDuration = 4000
                 )
             }
+
+            // DEBUG: Log the actual colors being sent
+            val colorsToSend = runtimeConfig?.baseConfig?.getColorWords()
+                ?: listOf("rot", "blau", "grün", "gelb")
+            DebugLogger.d("TaskControl", "Colors being sent to Projector: $colorsToSend")
+            DebugLogger.d("TaskControl", "Final color count: ${colorsToSend.size}")
 
             // Create and send StartTaskMessage
             val startMessage = StartTaskMessage(
@@ -60,10 +82,13 @@ class TaskControlNetworkManager(
                     minIntervalMs = timing.minInterval.toLong(),
                     maxIntervalMs = timing.maxInterval.toLong(),
                     countdownDurationMs = timing.countdownDuration * 1000L,
-                    colors = runtimeConfig?.baseConfig?.getColorWords() ?: listOf("rot", "blau", "grün", "gelb", "schwarz", "orange", "lila"),
+                    colors = colorsToSend,
                     language = "de-DE"
                 )
             )
+
+            // DEBUG: Log the complete StroopSettings being sent
+            DebugLogger.d("TaskControl", "StroopSettings being sent: ${startMessage.stroopSettings}")
 
             networkClient.sendMessage(startMessage)
             _currentTaskState.value = TaskState.Starting(taskId, taskLabel)

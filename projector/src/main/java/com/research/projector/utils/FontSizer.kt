@@ -10,8 +10,8 @@ import com.research.projector.models.RuntimeConfig
 import kotlin.math.min
 
 /**
- * UPDATED: FontSizer now calculates optimal size for each word individually
- * Each word uses the maximum possible font size that fits within screen constraints
+ * FIXED: FontSizer now properly handles longer German words like "schwarz" and "orange"
+ * Enhanced with better margins, proper font metrics, and conservative sizing
  */
 class FontSizer(private val context: Context) {
 
@@ -20,14 +20,12 @@ class FontSizer(private val context: Context) {
     companion object {
         // Font sizing constraints (in sp)
         private const val MIN_FONT_SIZE_SP = 24f
-        private const val MAX_FONT_SIZE_SP = 300f // Increased max for short words
+        private const val MAX_FONT_SIZE_SP = 300f
 
-        // Margin in dp (approximately 1cm as specified)
-        private const val HORIZONTAL_MARGIN_DP = 38f
-        private const val VERTICAL_MARGIN_DP = 20f
-
-        // Safety margins to ensure text doesn't touch edges
-        private const val SAFETY_MARGIN_DP = 8f
+        // FIXED: Increased margins for longer German words
+        private const val HORIZONTAL_MARGIN_DP = 60f  // Increased from 38f
+        private const val VERTICAL_MARGIN_DP = 40f    // Increased from 20f
+        private const val SAFETY_MARGIN_DP = 20f      // Increased from 8f
 
         // Font family for consistent rendering
         private const val FONT_FAMILY = "sans-serif"
@@ -47,7 +45,7 @@ class FontSizer(private val context: Context) {
             return WordFontSizingResult.Error("Empty word provided")
         }
 
-        // Calculate available display area with margins
+        // Calculate available display area with enhanced margins
         val horizontalMarginPx = dpToPx(HORIZONTAL_MARGIN_DP * 2) // left + right
         val verticalMarginPx = dpToPx(VERTICAL_MARGIN_DP * 2) // top + bottom
         val safetyMarginPx = dpToPx(SAFETY_MARGIN_DP * 2) // additional safety
@@ -152,27 +150,29 @@ class FontSizer(private val context: Context) {
     }
 
     /**
-     * Binary search to find the largest font size that fits within constraints for specific word
+     * FIXED: Binary search with conservative sizing for German words
      */
     private fun findOptimalFontSizeForWord(word: String, maxWidth: Int, maxHeight: Int): Float {
         var minSize = MIN_FONT_SIZE_SP
         var maxSize = MAX_FONT_SIZE_SP
         var optimalSize = minSize
 
-        // Binary search with precision of 0.5sp
-        while (maxSize - minSize > 0.5f) {
+        // Use more conservative target (90% instead of 100%)
+        val targetWidth = maxWidth * 0.90f
+        val targetHeight = maxHeight * 0.90f
+
+        // Binary search with higher precision for better accuracy
+        while (maxSize - minSize > 0.25f) {  // Increased precision from 0.5f
             val testSize = (minSize + maxSize) / 2f
             val testSizePx = spToPx(testSize)
 
             val textWidth = calculateTextWidth(word, testSizePx)
             val textHeight = calculateTextHeight(word, testSizePx)
 
-            if (textWidth <= maxWidth && textHeight <= maxHeight) {
-                // Size fits, try larger
+            if (textWidth <= targetWidth && textHeight <= targetHeight) {
                 optimalSize = testSize
                 minSize = testSize
             } else {
-                // Size too large, try smaller
                 maxSize = testSize
             }
         }
@@ -181,21 +181,25 @@ class FontSizer(private val context: Context) {
     }
 
     /**
-     * Calculate text width for given text and font size
+     * FIXED: Calculate text width with padding for character spacing
      */
     private fun calculateTextWidth(text: String, fontSizePx: Float): Float {
         val paint = createPaint(fontSizePx)
-        return paint.measureText(text)
+        val width = paint.measureText(text)
+        // Add 10% padding for character spacing and rendering variations
+        return width * 1.1f
     }
 
     /**
-     * Calculate text height for given text and font size
+     * FIXED: Calculate proper text height using font metrics
      */
     private fun calculateTextHeight(text: String, fontSizePx: Float): Float {
         val paint = createPaint(fontSizePx)
-        val rect = Rect()
-        paint.getTextBounds(text, 0, text.length, rect)
-        return rect.height().toFloat()
+        val fontMetrics = paint.fontMetrics
+        // Use full font height including ascenders and descenders
+        val totalHeight = fontMetrics.bottom - fontMetrics.top
+        // Add 5% padding for rendering variations
+        return totalHeight * 1.05f
     }
 
     /**
@@ -243,7 +247,7 @@ class FontSizer(private val context: Context) {
         val screenSizeInches = pxToInches(screenSizePx)
         val fontSizeInches = pxToInches(fontSizePx.toInt())
 
-        // Font should be between 0.2" and 3" for good readability (increased max for short words)
+        // Font should be between 0.2" and 3" for good readability
         if (fontSizeInches < 0.2f) {
             return FontValidationResult.Error("Font too small for peripheral vision reading")
         }
@@ -344,7 +348,7 @@ sealed class AllWordsFontSizingResult {
 }
 
 /**
- * Font validation result (unchanged)
+ * Font validation result
  */
 sealed class FontValidationResult {
     data class Valid(val fontSize: Float) : FontValidationResult()

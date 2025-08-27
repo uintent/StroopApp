@@ -16,6 +16,7 @@ import com.research.master.utils.TaskCompletionData
 import com.research.master.utils.FileManager
 import com.research.master.utils.ConfigLoadResult
 import com.research.master.utils.DebugLogger
+import com.research.shared.models.RuntimeConfig
 import com.research.shared.network.StroopDisplayMessage
 import com.research.shared.network.StroopHiddenMessage
 import com.research.shared.network.HeartbeatMessage
@@ -38,6 +39,7 @@ import androidx.core.content.ContextCompat
  * Shows current Stroop word from Projector and allows moderator to control task flow
  * Enhanced with complete data collection system for task metrics and timing
  * Collects individual stroop responses in memory, aggregates when task ends
+ * FIXED: Now loads and passes RuntimeConfig to ensure proper color configuration
  */
 class ColorDisplayActivity : AppCompatActivity() {
 
@@ -54,6 +56,9 @@ class ColorDisplayActivity : AppCompatActivity() {
     private var taskTimeout: Int = 0
     private var isIndividualTask: Boolean = true
     private var iterationCounter: Int = 0     // NEW: Track current iteration
+
+    // FIXED: Add RuntimeConfig to pass proper color configuration
+    private var runtimeConfig: RuntimeConfig? = null
 
     // Task state
     private var currentStroopWord: String? = null
@@ -141,24 +146,32 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * Load countdown duration from configuration using FileManager
+     * FIXED: Load countdown duration and RuntimeConfig from configuration using FileManager
+     * Now stores the complete config for passing to startTask()
      */
     private fun loadCountdownFromConfig() {
         lifecycleScope.launch {
             try {
                 when (val result = fileManager.loadConfiguration()) {
                     is ConfigLoadResult.Success -> {
-                        // Get countdown duration from config (in seconds) and convert to milliseconds
-                        val configCountdown = result.config.countdownDuration * 1000L
+                        // Store the complete RuntimeConfig
+                        runtimeConfig = result.config
+
+                        // Get countdown duration from the effective timing config
+                        val configCountdown = result.config.getEffectiveTiming().countdownDuration * 1000L
                         countdownDuration = configCountdown
-                        DebugLogger.d("TaskControl", "Countdown duration loaded from config: ${countdownDuration}ms (${result.config.countdownDuration}s)")
+
+                        DebugLogger.d("TaskControl", "Countdown duration loaded: ${countdownDuration}ms")
+                        DebugLogger.d("TaskControl", "Colors available: ${result.config.baseConfig.stroopColors.size}")
                     }
                     is ConfigLoadResult.Error -> {
-                        DebugLogger.w("TaskControl", "Config loading failed: ${fileManager.getErrorMessage(result.error)}, using default countdown duration: ${countdownDuration}ms")
+                        DebugLogger.w("TaskControl", "Config loading failed: ${fileManager.getErrorMessage(result.error)}")
+                        runtimeConfig = null
                     }
                 }
             } catch (e: Exception) {
                 DebugLogger.e("TaskControl", "Error loading countdown duration from config, using default: ${countdownDuration}ms", e)
+                runtimeConfig = null
             }
         }
     }
@@ -638,31 +651,33 @@ class ColorDisplayActivity : AppCompatActivity() {
         }
 
         val paint = binding.textCurrentColor.paint
-        var testSize = 100f
-        val maxSize = 100f
-        val minSize = 16f
+        val maxSize = 200f
+        val minSize = 12f
 
-        val usableWidth = availableWidth * 0.8f
-        val usableHeight = availableHeight * 0.8f
+        // Use 90% of available space to ensure text fits with some padding
+        val targetWidth = availableWidth * 0.90f
+        val targetHeight = availableHeight * 0.90f
 
-        var low = minSize
-        var high = maxSize
+        var testSize = maxSize
 
-        while (high - low > 1) {
-            testSize = (low + high) / 2
+        // Start from max size and work down until text fits
+        while (testSize >= minSize) {
             paint.textSize = testSize * resources.displayMetrics.scaledDensity
 
             val textWidth = paint.measureText(text)
-            val textHeight = paint.fontMetrics.let { it.bottom - it.top }
+            val fontMetrics = paint.fontMetrics
+            val textHeight = fontMetrics.bottom - fontMetrics.top
 
-            if (textWidth <= usableWidth && textHeight <= usableHeight) {
-                low = testSize
-            } else {
-                high = testSize
+            // If both width and height fit, we found our size
+            if (textWidth <= targetWidth && textHeight <= targetHeight) {
+                return testSize
             }
+
+            // Reduce size by 2sp and try again
+            testSize -= 2f
         }
 
-        return low
+        return minSize
     }
 
     private fun setResponseButtonsState(active: Boolean) {
@@ -909,7 +924,8 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     /**
-     * Start task - UPDATED to get fresh iteration counter on each start
+     * FIXED: Start task - now passes the loaded RuntimeConfig
+     * UPDATED to get fresh iteration counter on each start
      * SINGLE METHOD - No duplicates
      */
     private fun startTask() {
@@ -922,16 +938,26 @@ class ColorDisplayActivity : AppCompatActivity() {
                 iterationCounter = SessionManager.getNextIterationCounter(taskNumber)
                 DebugLogger.d("TaskControl", "Starting task: $taskNumber (iteration $iterationCounter)")
 
+                // Debug RuntimeConfig state before sending
+                if (runtimeConfig != null) {
+                    DebugLogger.d("TaskControl", "Passing RuntimeConfig with ${runtimeConfig!!.baseConfig.stroopColors.size} colors to TaskControlManager")
+                    DebugLogger.d("TaskControl", "Colors: ${runtimeConfig!!.baseConfig.stroopColors.keys}")
+                } else {
+                    DebugLogger.w("TaskControl", "RuntimeConfig is null - TaskControlManager will use fallback colors")
+                }
+
                 // Reset data collection for new task iteration
                 resetDataCollection()
                 isTaskTimedOut = false
                 isTaskRunning = true
 
+                // FIXED: Pass the loaded RuntimeConfig to ensure proper color configuration
                 val success = taskControlManager.startTask(
                     taskId = taskNumber.toString(), // Convert to String for network compatibility
                     taskLabel = taskLabel ?: getString(R.string.color_display_unknown_task),
                     taskTimeoutMs = (taskTimeout * 1000).toLong(),
-                    sessionId = sessionIdValue
+                    sessionId = sessionIdValue,
+                    runtimeConfig = runtimeConfig // FIXED: Pass the loaded config!
                 )
 
                 if (!success) {
