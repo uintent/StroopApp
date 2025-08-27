@@ -351,4 +351,40 @@
     <string name="task_summary_task_complete_title">Task Complete</string>
     <string name="task_summary_next_task_question">What would you like to do next?</string>
     <string name="task_summary_next_task_failed_format">Failed to start next task: %1$s</string>
+
+    <!-- Debug Logging Section - Add these to your existing strings.xml -->
+    <string name="settings_debug_logging_title">Debug Logging</string>
+    <string name="settings_debug_logging_description">Configure debug logging options for troubleshooting and development.</string>
+
+    <!-- Console Logging -->
+    <string name="settings_console_logging_title">Console Logging</string>
+    <string name="settings_console_logging_description">Enable or disable debug messages in the Android log (visible in Android Studio).</string>
+
+    <!-- File Logging -->
+    <string name="settings_file_logging_title">File Logging</string>
+    <string name="settings_file_logging_description">Enable or disable saving debug messages to log files on device storage.</string>
+
+    <!-- Log File Folder -->
+    <string name="settings_log_file_folder_title">Log File Folder</string>
+    <string name="settings_log_file_folder_description">Choose where log files will be saved. Only used when file logging is enabled.</string>
+    <string name="settings_current_log_folder">Current Log File Folder:</string>
+
+    <!-- Log Folder Status Messages -->
+    <string name="settings_log_folder_disabled">File logging is disabled</string>
+    <string name="settings_log_folder_not_exist">Log folder does not exist</string>
+    <string name="settings_log_folder_not_directory">Path is not a directory</string>
+    <string name="settings_log_folder_not_writable">Log folder is not writable</string>
+    <string name="settings_log_folder_valid">✓ Valid log folder (%1$d log files found)</string>
+
+    <!-- Log Folder Action Buttons -->
+    <string name="settings_browse_log_folder">Browse...</string>
+    <string name="settings_reset_log_default">Reset to Default</string>
+
+    <!-- Success/Error Messages -->
+    <string name="settings_log_folder_reset_default">Log folder reset to default location</string>
+    <string name="settings_log_folder_required">Log file folder is required when file logging is enabled</string>
+    <string name="settings_log_folder_invalid">Selected log folder is not writable</string>
+
+    <!-- Default folder name -->
+    <string name="settings_default_log_folder_name" translatable="false">StroopApp_Logs</string>
 </resources>

@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.text.SimpleDateFormat
 import java.util.*
-import android.util.Log
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -63,7 +62,7 @@ object SessionManager {
         val sessionExport = convertToSessionExport(sessionData)
         currentSessionFile = fileManager.createSessionFile(sessionId, sessionExport)
 
-        Log.d("SessionManager", "Created session: $sessionId for participant: $participantName")
+        DebugLogger.d("SessionManager", "Created session: $sessionId for participant: $participantName")
         return sessionId
     }
 
@@ -77,7 +76,7 @@ object SessionManager {
         val session = _currentSession.value ?: return
         val sessionFile = currentSessionFile ?: return
 
-        Log.d("SessionManager", "=== STARTING END SESSION ===")
+        DebugLogger.d("SessionManager", "=== STARTING END SESSION ===")
 
         val updatedSession = session.copy(
             interviewEndTime = System.currentTimeMillis(),
@@ -100,16 +99,16 @@ object SessionManager {
             // Clear temp file reference since it's now been moved
             currentSessionFile = null
 
-            Log.d("SessionManager", "Session finalized to: ${finalFile.absolutePath}")
+            DebugLogger.d("SessionManager", "Session finalized to: ${finalFile.absolutePath}")
 
         } catch (e: Exception) {
-            Log.e("SessionManager", "Failed to finalize session to user folder", e)
+            DebugLogger.e("SessionManager", "Failed to finalize session to user folder", e)
             // Fallback: just update the temp file
             fileManager.updateSessionFile(sessionFile, sessionExport)
             throw e
         }
 
-        Log.d("SessionManager", "=== END SESSION COMPLETE ===")
+        DebugLogger.d("SessionManager", "=== END SESSION COMPLETE ===")
     }
 
     /**
@@ -131,8 +130,8 @@ object SessionManager {
         val sessionFile = currentSessionFile
 
         if (session != null && sessionFile != null) {
-            Log.d("SessionManager", "=== STARTING CLEAR SESSION ===")
-            Log.d("SessionManager", "Current session ID: ${session.sessionId}")
+            DebugLogger.d("SessionManager", "=== STARTING CLEAR SESSION ===")
+            DebugLogger.d("SessionManager", "Current session ID: ${session.sessionId}")
 
             try {
                 // Mark session as discarded
@@ -141,29 +140,29 @@ object SessionManager {
                     sessionStatus = "discarded"
                 )
 
-                Log.d("SessionManager", "Updated current session in memory: discarded=${discardedSession.discarded}")
+                DebugLogger.d("SessionManager", "Updated current session in memory: discarded=${discardedSession.discarded}")
 
                 // Save the updated session with discarded flag using FileManager
                 val sessionExport = convertToSessionExport(discardedSession)
                 fileManager.updateSessionFile(sessionFile, sessionExport)
-                Log.d("SessionManager", "Saved current session to file")
+                DebugLogger.d("SessionManager", "Saved current session to file")
 
                 // Clear the current session from memory
                 _currentSession.value = null
                 currentSessionFile = null
 
-                Log.d("SessionManager", "=== CLEAR SESSION COMPLETE ===")
-                Log.d("SessionManager", "Session marked as discarded and saved")
+                DebugLogger.d("SessionManager", "=== CLEAR SESSION COMPLETE ===")
+                DebugLogger.d("SessionManager", "Session marked as discarded and saved")
 
             } catch (e: Exception) {
-                Log.e("SessionManager", "Error marking session as discarded", e)
+                DebugLogger.e("SessionManager", "Error marking session as discarded", e)
                 // Still clear from memory even if saving fails
                 _currentSession.value = null
                 currentSessionFile = null
                 throw e
             }
         } else {
-            Log.d("SessionManager", "No session to clear")
+            DebugLogger.d("SessionManager", "No session to clear")
         }
     }
 
@@ -176,8 +175,8 @@ object SessionManager {
         val session = _currentSession.value ?: return
         val sessionFile = currentSessionFile ?: return
 
-        Log.d("SessionManager", "=== ADDING TASK DATA ===")
-        Log.d("SessionManager", "Task: ${taskData.taskNumber} (iteration ${taskData.iterationCounter})")
+        DebugLogger.d("SessionManager", "=== ADDING TASK DATA ===")
+        DebugLogger.d("SessionManager", "Task: ${taskData.taskNumber} (iteration ${taskData.iterationCounter})")
 
         // Add task to local session data
         val updatedTasks = session.tasks.toMutableList()
@@ -189,7 +188,7 @@ object SessionManager {
         val taskExport = convertTaskToExport(taskData)
         fileManager.addTaskIteration(sessionFile, taskExport)
 
-        Log.d("SessionManager", "Added task data: ${taskData.taskNumber} to session: ${session.sessionId}")
+        DebugLogger.d("SessionManager", "Added task data: ${taskData.taskNumber} to session: ${session.sessionId}")
     }
 
     /**
@@ -201,9 +200,9 @@ object SessionManager {
         val session = _currentSession.value ?: throw IllegalStateException("No current session")
         val sessionFile = currentSessionFile ?: throw IllegalStateException("No current session file")
 
-        Log.d("SessionManager", "=== UPDATING TASK ASQ DATA ===")
-        Log.d("SessionManager", "Task Number: $taskNumber, Iteration: $iterationCounter")
-        Log.d("SessionManager", "ASQ Data: $asqData")
+        DebugLogger.d("SessionManager", "=== UPDATING TASK ASQ DATA ===")
+        DebugLogger.d("SessionManager", "Task Number: $taskNumber, Iteration: $iterationCounter")
+        DebugLogger.d("SessionManager", "ASQ Data: $asqData")
 
         // Update local session data
         val tasks = session.tasks.toMutableList()
@@ -212,7 +211,7 @@ object SessionManager {
         }
 
         if (taskIndex == -1) {
-            Log.e("SessionManager", "Task $taskNumber (iteration $iterationCounter) not found in session")
+            DebugLogger.e("SessionManager", "Task $taskNumber (iteration $iterationCounter) not found in session")
             throw IllegalArgumentException("Task $taskNumber (iteration $iterationCounter) not found in current session")
         }
 
@@ -238,8 +237,8 @@ object SessionManager {
         // Update the specific iteration using FileManager
         fileManager.updateTaskIteration(sessionFile, taskNumber, iterationCounter, updatedTaskExport)
 
-        Log.d("SessionManager", "Task ${taskNumber} (iteration ${iterationCounter}) updated with ASQ data: $asqData")
-        Log.d("SessionManager", "=== TASK ASQ UPDATE COMPLETE ===")
+        DebugLogger.d("SessionManager", "Task ${taskNumber} (iteration ${iterationCounter}) updated with ASQ data: $asqData")
+        DebugLogger.d("SessionManager", "=== TASK ASQ UPDATE COMPLETE ===")
     }
 
     /**
@@ -271,7 +270,7 @@ object SessionManager {
             val recoverableSessions = fileManager.findRecoverableSessions()
 
             if (recoverableSessions.isEmpty()) {
-                Log.d("SessionManager", "No recoverable sessions found")
+                DebugLogger.d("SessionManager", "No recoverable sessions found")
                 return null
             }
 
@@ -284,13 +283,13 @@ object SessionManager {
                 if (fileManager.isSessionIncomplete(mostRecentFile)) {
                     currentSessionFile = mostRecentFile
                     val sessionData = convertFromSessionExport(sessionExport)
-                    Log.d("SessionManager", "Found incomplete session: ${sessionData.sessionId}")
+                    DebugLogger.d("SessionManager", "Found incomplete session: ${sessionData.sessionId}")
                     return sessionData
                 }
             }
 
         } catch (e: Exception) {
-            Log.e("SessionManager", "Error checking for incomplete session", e)
+            DebugLogger.e("SessionManager", "Error checking for incomplete session", e)
         }
 
         return null
@@ -315,7 +314,7 @@ object SessionManager {
             }
         }
 
-        Log.d("SessionManager", "Resumed session: ${sessionData.sessionId}")
+        DebugLogger.d("SessionManager", "Resumed session: ${sessionData.sessionId}")
     }
 
     /**

@@ -10,6 +10,7 @@ object NetworkConstants {
     // Timeout values
     const val SOCKET_TIMEOUT_MS = 0  // 0 = no timeout for read operations
     const val SOCKET_CONNECTION_TIMEOUT_MS = 10000  // 10 seconds for initial connection
+    const val SOCKET_READ_TIMEOUT_MS = 30000  // 30 seconds for socket read operations
     const val HEARTBEAT_INTERVAL_MS = 5000L  // 5 seconds
     const val HEARTBEAT_TIMEOUT_MS = 15000L  // 15 seconds - miss 3 heartbeats before timeout
 

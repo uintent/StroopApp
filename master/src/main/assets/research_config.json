@@ -11,55 +11,55 @@
   },
   "tasks": {
     "1": {
-      "label": "Quick Assessment",
-      "text": "Short baseline task to establish participant response patterns and system calibration",
+      "label": "Change Channel & Set as favorite",
+      "text": "Please set the radio to the channel Alsterradio, which you can find for example at 104.0 MHz. Once you have tuned to this station, please save it as one of your favorites.",
       "timeout_seconds": 60
     },
     "2": {
-      "label": "Standard Navigation",
-      "text": "Moderate complexity task involving navigation system interaction while monitoring cognitive load",
-      "timeout_seconds": 90
+      "label": "Climate Controls (on/off)",
+      "text": "Please activate the AC.",
+      "timeout_seconds": 30
     },
     "3": {
-      "label": "Climate Control",
-      "text": "Multi-step task requiring interaction with vehicle climate control systems and temperature adjustment",
-      "timeout_seconds": 120
+      "label": "Climate Controls (Defog)",
+      "text": "Please activate the defogging for the wind screen.",
+      "timeout_seconds": 30
     },
     "4": {
-      "label": "Complex Navigation",
-      "text": "Advanced navigation task with multiple waypoints and route modifications under time pressure",
-      "timeout_seconds": 180
+      "label": "Hazard lights",
+      "text": "Please switch on the hazard lights",
+      "timeout_seconds": 30
     },
     "5": {
-      "label": "Full Integration",
-      "text": "Comprehensive task combining navigation, climate control, and secondary system interactions",
-      "timeout_seconds": 240
+      "label": "Volume Controls",
+      "text": "Please turn up the radio volume",
+      "timeout_seconds": 30
     }
   },
   "task_lists": {
     "1": {
-      "label": "Basic Test Sequence",
-      "task_sequence": "1|2"
-    },
-    "2": {
-      "label": "Extended Research Protocol",
-      "task_sequence": "1|3|4"
-    },
-    "3": {
-      "label": "Full Assessment Battery",
+      "label": "Rotation 1",
       "task_sequence": "1|2|3|4|5"
     },
+    "2": {
+      "label": "Rotation 2",
+      "task_sequence": "5|1|2|3|4"
+    },
+    "3": {
+      "label": "Rotation 3",
+      "task_sequence": "4|5|1|2|3"
+    },
     "4": {
-      "label": "Quick Validation",
-      "task_sequence": "1"
+      "label": "Rotation 4",
+      "task_sequence": "3|4|5|1|2"
     },
     "5": {
-      "label": "Moderate Session",
-      "task_sequence": "2|3"
+      "label": "Rotation 5",
+      "task_sequence": "2|3|4|5|1"
     },
     "6": {
-      "label": "Driver Training Protocol",
-      "task_sequence": "1|4|2"
+      "label": "Rotation 6",
+      "task_sequence": "5|4|3|2|1"
     }
   },
   "timing": {

@@ -16,10 +16,10 @@ import com.research.master.databinding.ActivityTaskSelectionBinding
 import com.research.master.utils.MasterConfigManager
 import com.research.master.utils.SessionManager
 import com.research.master.utils.FileManager
+import com.research.master.utils.DebugLogger
 import com.research.shared.models.TaskConfig
 import com.research.shared.models.TaskListConfig
 import kotlinx.coroutines.launch
-import android.util.Log
 
 /**
  * Activity for selecting individual tasks or task lists
@@ -134,14 +134,14 @@ class TaskSelectionActivity : AppCompatActivity() {
         val taskListConfig = config.baseConfig.taskLists[taskListId]
 
         if (taskListConfig == null) {
-            Log.e("TaskSelection", "Task list '$taskListId' not found in config")
+            DebugLogger.e("TaskSelection", "Task list '$taskListId' not found in config")
             showConfigError(getString(R.string.task_selection_config_error_format, "Task list '$taskListId' not found"))
             return
         }
 
         // Get task IDs in the order specified in the config
         val taskIds = taskListConfig.getTaskIds()
-        Log.d("TaskSelection", "Task list '$taskListId' contains tasks: $taskIds")
+        DebugLogger.d("TaskSelection", "Task list '$taskListId' contains tasks: $taskIds")
 
         // Create ordered map of tasks (LinkedHashMap preserves insertion order)
         val orderedTasks = linkedMapOf<String, TaskConfig>()
@@ -149,7 +149,7 @@ class TaskSelectionActivity : AppCompatActivity() {
             allTasks[taskId]?.let { taskConfig ->
                 orderedTasks[taskId] = taskConfig
             } ?: run {
-                Log.w("TaskSelection", "Task '$taskId' from list '$taskListId' not found in config")
+                DebugLogger.w("TaskSelection", "Task '$taskId' from list '$taskListId' not found in config")
             }
         }
 
@@ -165,7 +165,7 @@ class TaskSelectionActivity : AppCompatActivity() {
         // Update UI visibility
         updateSectionVisibility(orderedTasks, emptyMap())
 
-        Log.d("TaskSelection", "Task list mode: loaded ${orderedTasks.size} tasks from list '$taskListId'")
+        DebugLogger.d("TaskSelection", "Task list mode: loaded ${orderedTasks.size} tasks from list '$taskListId'")
     }
 
     /**
@@ -185,7 +185,7 @@ class TaskSelectionActivity : AppCompatActivity() {
         // Update UI visibility
         updateSectionVisibility(sortedTasks, taskLists)
 
-        Log.d("TaskSelection", "Global mode: loaded ${sortedTasks.size} tasks and ${taskLists.size} task lists")
+        DebugLogger.d("TaskSelection", "Global mode: loaded ${sortedTasks.size} tasks and ${taskLists.size} task lists")
     }
 
     /**
@@ -203,7 +203,7 @@ class TaskSelectionActivity : AppCompatActivity() {
                             try {
                                 taskId.toInt()
                             } catch (e: NumberFormatException) {
-                                Log.w("TaskSelection", "Invalid task ID format: $taskId")
+                                DebugLogger.w("TaskSelection", "Invalid task ID format: $taskId")
                                 null
                             }
                         }
@@ -212,19 +212,19 @@ class TaskSelectionActivity : AppCompatActivity() {
                             val completionStatus = fileManager.getTaskListCompletionStatus(sessionFile, taskNumbers)
                             tasksAdapter.updateCompletionStatus(completionStatus)
 
-                            Log.d("TaskSelection", "Updated completion status for ${completionStatus.size} tasks")
+                            DebugLogger.d("TaskSelection", "Updated completion status for ${completionStatus.size} tasks")
                             completionStatus.forEach { (taskNum, status) ->
-                                Log.d("TaskSelection", "  Task $taskNum: $status")
+                                DebugLogger.d("TaskSelection", "  Task $taskNum: $status")
                             }
                         }
                     } else {
-                        Log.d("TaskSelection", "No session file available for completion status")
+                        DebugLogger.d("TaskSelection", "No session file available for completion status")
                     }
                 } else {
-                    Log.d("TaskSelection", "No active session for completion status")
+                    DebugLogger.d("TaskSelection", "No active session for completion status")
                 }
             } catch (e: Exception) {
-                Log.e("TaskSelection", "Failed to check task completion status", e)
+                DebugLogger.e("TaskSelection", "Failed to check task completion status", e)
             }
         }
     }
@@ -281,13 +281,13 @@ class TaskSelectionActivity : AppCompatActivity() {
      * UPDATED: Passes task list context when in task list mode
      */
     private fun onIndividualTaskSelected(taskId: String, taskConfig: TaskConfig) {
-        Log.d("TaskSelection", "Individual task selected: $taskId - ${taskConfig.label}")
+        DebugLogger.d("TaskSelection", "Individual task selected: $taskId - ${taskConfig.label}")
 
         // Convert String taskId to Int for FileManager compatibility
         val taskNumber = try {
             taskId.toInt()
         } catch (e: NumberFormatException) {
-            Log.e("TaskSelection", "Invalid task ID format: $taskId, expected integer")
+            DebugLogger.e("TaskSelection", "Invalid task ID format: $taskId, expected integer")
             Snackbar.make(
                 binding.root,
                 getString(R.string.task_selection_invalid_task_id_format, taskId),
@@ -318,7 +318,7 @@ class TaskSelectionActivity : AppCompatActivity() {
      * UPDATED: Now actually navigates to task list mode instead of showing placeholder
      */
     private fun onTaskListSelected(taskListId: String, taskListConfig: TaskListConfig) {
-        Log.d("TaskSelection", "Task list selected: $taskListId - ${taskListConfig.label}")
+        DebugLogger.d("TaskSelection", "Task list selected: $taskListId - ${taskListConfig.label}")
 
         // Navigate to the same activity but in task list mode
         val intent = Intent(this, TaskSelectionActivity::class.java).apply {
@@ -332,7 +332,7 @@ class TaskSelectionActivity : AppCompatActivity() {
      * Return to main task lists view (when in task list mode)
      */
     private fun returnToTaskLists() {
-        Log.d("TaskSelection", "Returning to Task Lists")
+        DebugLogger.d("TaskSelection", "Returning to Task Lists")
         // Simply finish this activity to return to the previous task selection screen
         finish()
     }
@@ -341,7 +341,7 @@ class TaskSelectionActivity : AppCompatActivity() {
      * Return to Session Manager screen (when in global mode)
      */
     private fun returnToSessionManager() {
-        Log.d("TaskSelection", "Returning to Session Manager")
+        DebugLogger.d("TaskSelection", "Returning to Session Manager")
 
         val intent = Intent(this, MainSessionActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

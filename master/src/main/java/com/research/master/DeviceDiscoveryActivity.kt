@@ -19,9 +19,9 @@ import com.research.master.databinding.ActivityDeviceDiscoveryBinding
 import com.research.master.network.MasterNetworkClient
 import com.research.master.network.NetworkManager
 import com.research.master.utils.MasterConfigManager
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import android.util.Log
 import android.view.inputmethod.EditorInfo
 import android.content.Intent
 import androidx.appcompat.app.AlertDialog
@@ -42,7 +42,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            Log.d("MasterNetwork", "Location permission granted")
+            DebugLogger.d("DeviceDiscovery", "Location permission granted")
         } else {
             showPermissionError()
         }
@@ -53,6 +53,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
 
         binding = ActivityDeviceDiscoveryBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
 
         // Set up toolbar
         binding.toolbar.title = getString(R.string.device_discovery_title)
@@ -114,9 +117,9 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.d("MasterNetwork", "Location permission granted")
+                DebugLogger.d("DeviceDiscovery", "Location permission granted")
             } else {
-                Log.e("MasterNetwork", "Location permission denied")
+                DebugLogger.e("DeviceDiscovery", "Location permission denied")
             }
         }
     }
@@ -130,7 +133,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             if (!configLoaded) {
                 showConfigurationError()
             } else {
-                Log.d("MasterConfig", "Configuration loaded successfully")
+                DebugLogger.d("DeviceDiscovery", "Configuration loaded successfully")
                 updateConfigStatus(getString(R.string.device_discovery_config_loaded))
             }
         }
@@ -277,20 +280,20 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             isResolved = true
         )
 
-        Log.d("MasterNetwork", "Attempting manual connection to $ipAddress:$port")
+        DebugLogger.d("DeviceDiscovery", "Attempting manual connection to $ipAddress:$port")
 
         // Attempt connection
         lifecycleScope.launch {
             try {
                 val success = networkClient.connectToDevice(manualDevice)
                 if (success) {
-                    Log.d("MasterNetwork", "Manual connection successful - starting session")
+                    DebugLogger.d("DeviceDiscovery", "Manual connection successful - starting session")
 
                     // ✅ CRITICAL FIX: Start session to send handshake
                     val sessionId = networkClient.startSession()
                     NetworkManager.setCurrentSessionId(sessionId)
 
-                    Log.d("MasterNetwork", "Session started: $sessionId")
+                    DebugLogger.d("DeviceDiscovery", "Session started: $sessionId")
 
                     // Save last successful connection
                     saveLastConnection(ipAddress, port)
@@ -310,7 +313,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     startActivity(Intent(this@DeviceDiscoveryActivity, MainSessionActivity::class.java))
 
                 } else {
-                    Log.e("MasterNetwork", "Manual connection failed")
+                    DebugLogger.e("DeviceDiscovery", "Manual connection failed")
                     Snackbar.make(
                         binding.root,
                         getString(R.string.device_discovery_connection_failed_format, ipAddress, port),
@@ -318,7 +321,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     ).show()
                 }
             } catch (e: Exception) {
-                Log.e("MasterNetwork", "Connection attempt failed", e)
+                DebugLogger.e("DeviceDiscovery", "Connection attempt failed", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.device_discovery_connection_error_format, e.message),
@@ -408,7 +411,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
      * Update configuration status in UI
      */
     private fun updateConfigStatus(status: String) {
-        Log.d("MasterConfig", "Config status: $status")
+        DebugLogger.d("DeviceDiscovery", "Config status: $status")
     }
 
     /**
@@ -422,7 +425,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     this,
                     Manifest.permission.ACCESS_FINE_LOCATION
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    Log.d("MasterNetwork", "Location permission already granted")
+                    DebugLogger.d("DeviceDiscovery", "Location permission already granted")
                 }
                 else -> {
                     locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -461,13 +464,13 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
             try {
                 val success = networkClient.connectToDevice(device)
                 if (success) {
-                    Log.d("MasterNetwork", "NSD connection successful - starting session")
+                    DebugLogger.d("DeviceDiscovery", "NSD connection successful - starting session")
 
                     // ✅ CRITICAL FIX: Start session to send handshake
                     val sessionId = networkClient.startSession()
                     NetworkManager.setCurrentSessionId(sessionId)
 
-                    Log.d("MasterNetwork", "Session started: $sessionId")
+                    DebugLogger.d("DeviceDiscovery", "Session started: $sessionId")
 
                     // Wait for handshake to be processed by Projector
                     kotlinx.coroutines.delay(500)
@@ -475,7 +478,7 @@ class DeviceDiscoveryActivity : AppCompatActivity() {
                     navigateToMainSessionManager()
                 }
             } catch (e: Exception) {
-                Log.e("MasterNetwork", "Connection failed", e)
+                DebugLogger.e("DeviceDiscovery", "Connection failed", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.device_discovery_connection_error_format, e.message),

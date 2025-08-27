@@ -104,6 +104,10 @@ class FileManager(private val context: Context) {
         private const val KEY_EXPORT_FOLDER = "export_folder_path"
         // Version for future format migrations
         private const val CURRENT_FORMAT_VERSION = "1.0"
+        // Add these constants to your existing companion object in FileManager.kt:
+        private const val PREF_CONSOLE_LOGGING_ENABLED = "console_logging_enabled"
+        private const val PREF_FILE_LOGGING_ENABLED = "file_logging_enabled"
+        private const val PREF_LOG_FILE_FOLDER = "log_file_folder"
     }
 
     private val gson = GsonBuilder()
@@ -1012,6 +1016,8 @@ class FileManager(private val context: Context) {
         }
     }
 
+
+
     /**
      * Deletes a session file (for cleanup or discard operations)
      * @param sessionFile File to delete
@@ -1184,6 +1190,122 @@ class FileManager(private val context: Context) {
             Log.e(TAG, "Failed to get file info: ${file.absolutePath}", e)
             null
         }
+    }
+
+
+
+// Add these methods to your FileManager class:
+
+// ============================================================================
+// DEBUG LOGGING SETTINGS
+// ============================================================================
+
+    /**
+     * Get whether console logging is enabled
+     */
+    fun isConsoleLoggingEnabled(): Boolean {
+        return try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_CONSOLE_LOGGING_ENABLED, true) // Default: enabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting console logging setting", e)
+            true // Default on error
+        }
+    }
+
+    /**
+     * Set console logging enabled state
+     */
+    fun setConsoleLoggingEnabled(enabled: Boolean) {
+        try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_CONSOLE_LOGGING_ENABLED, enabled)
+                .apply()
+            Log.d(TAG, "Console logging setting updated: $enabled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving console logging setting", e)
+            throw SessionFileException("Failed to save console logging setting: ${e.message}")
+        }
+    }
+
+    /**
+     * Get whether file logging is enabled
+     */
+    fun isFileLoggingEnabled(): Boolean {
+        return try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_FILE_LOGGING_ENABLED, false) // Default: disabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting file logging setting", e)
+            false // Default on error
+        }
+    }
+
+    /**
+     * Set file logging enabled state
+     */
+    fun setFileLoggingEnabled(enabled: Boolean) {
+        try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_FILE_LOGGING_ENABLED, enabled)
+                .apply()
+            Log.d(TAG, "File logging setting updated: $enabled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving file logging setting", e)
+            throw SessionFileException("Failed to save file logging setting: ${e.message}")
+        }
+    }
+
+    /**
+     * Get log file folder path
+     */
+    fun getLogFileFolder(): String {
+        return try {
+            val prefs = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+            val saved = prefs.getString(PREF_LOG_FILE_FOLDER, null)
+            if (saved.isNullOrEmpty()) {
+                getDefaultLogFileFolder()
+            } else {
+                saved
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting log file folder setting", e)
+            getDefaultLogFileFolder()
+        }
+    }
+
+    /**
+     * Set log file folder path
+     */
+    fun setLogFileFolder(folderPath: String) {
+        try {
+            context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(PREF_LOG_FILE_FOLDER, folderPath)
+                .apply()
+            Log.d(TAG, "Log file folder setting saved: $folderPath")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving log file folder setting", e)
+            throw SessionFileException("Failed to save log file folder setting: ${e.message}")
+        }
+    }
+
+    /**
+     * Get the default log file folder path
+     */
+    fun getDefaultLogFileFolder(): String {
+        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        return File(documentsDir, "StroopApp_Logs").absolutePath
+    }
+
+    /**
+     * Reset log file folder to default
+     */
+    fun resetLogFileFolderToDefault() {
+        setLogFileFolder(getDefaultLogFileFolder())
+        Log.d(TAG, "Log file folder reset to default")
     }
 
     /**

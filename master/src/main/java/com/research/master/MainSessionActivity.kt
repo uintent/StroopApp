@@ -2,7 +2,6 @@ package com.research.master
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -12,6 +11,7 @@ import com.research.master.databinding.ActivityMainSessionBinding
 import com.research.master.network.NetworkManager
 import com.research.master.utils.SessionManager
 import com.research.master.utils.SessionData
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.launch
 
 /**
@@ -30,6 +30,9 @@ class MainSessionActivity : AppCompatActivity() {
         binding = ActivityMainSessionBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
+
         // Set up toolbar
         setSupportActionBar(binding.toolbar)
         binding.toolbar.title = getString(R.string.main_session_title)
@@ -47,7 +50,6 @@ class MainSessionActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 showDisconnectConfirmation()
-
             }
         })
 
@@ -112,14 +114,14 @@ class MainSessionActivity : AppCompatActivity() {
                 // Load session into SessionManager memory so end/discard can find it
                 if (incompleteSession != null) {
                     SessionManager.resumeSession(incompleteSession)  // ADD THIS LINE
-                    Log.d("MainSession", "Loaded session into SessionManager memory: ${incompleteSession.sessionId}")
+                    DebugLogger.d("MainSession", "Loaded session into SessionManager memory: ${incompleteSession.sessionId}")
                 }
 
                 // Update UI based on session state
                 updateSessionUI(incompleteSession)
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error checking for existing session", e)
+                DebugLogger.e("MainSession", "Error checking for existing session", e)
                 showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_checking), e.message))
             }
         }
@@ -132,7 +134,7 @@ class MainSessionActivity : AppCompatActivity() {
     private fun updateSessionUI(sessionData: SessionData?) {
         if (sessionData != null && sessionData.ended == 0 && sessionData.discarded == 0) {
             // Show session info for incomplete sessions only (both flags explicitly 0)
-            Log.d("MainSession", "Showing session UI for: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
+            DebugLogger.d("MainSession", "Showing session UI for: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
 
             binding.layoutExistingSession.visibility = android.view.View.VISIBLE
             binding.textExistingSessionInfo.text = getString(
@@ -167,9 +169,9 @@ class MainSessionActivity : AppCompatActivity() {
                     sessionData.discarded != 0 -> "discarded flag = ${sessionData.discarded}"
                     else -> "unknown reason"
                 }
-                Log.d("MainSession", "Session not shown - $reason: ${sessionData.sessionId}")
+                DebugLogger.d("MainSession", "Session not shown - $reason: ${sessionData.sessionId}")
             } else {
-                Log.d("MainSession", "No session found")
+                DebugLogger.d("MainSession", "No session found")
             }
         }
     }
@@ -249,10 +251,10 @@ class MainSessionActivity : AppCompatActivity() {
                     Snackbar.LENGTH_LONG
                 ).show()
 
-                Log.d("MainSession", "Session ended and saved successfully")
+                DebugLogger.d("MainSession", "Session ended and saved successfully")
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error ending session", e)
+                DebugLogger.e("MainSession", "Error ending session", e)
 
                 // Re-enable buttons on error
                 binding.btnEndSession.isEnabled = true
@@ -297,10 +299,10 @@ class MainSessionActivity : AppCompatActivity() {
                     Snackbar.LENGTH_LONG
                 ).show()
 
-                Log.d("MainSession", "Session discarded without saving")
+                DebugLogger.d("MainSession", "Session discarded without saving")
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error discarding session", e)
+                DebugLogger.e("MainSession", "Error discarding session", e)
 
                 // Re-enable buttons on error
                 binding.btnDiscardSession.isEnabled = true
@@ -368,7 +370,7 @@ class MainSessionActivity : AppCompatActivity() {
                 }
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error starting new session", e)
+                DebugLogger.e("MainSession", "Error starting new session", e)
                 showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_starting), e.message))
             }
         }
@@ -392,7 +394,7 @@ class MainSessionActivity : AppCompatActivity() {
             return
         }
 
-        Log.d("MainSession", "Resuming session: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
+        DebugLogger.d("MainSession", "Resuming session: ${sessionData.sessionId} (ended=${sessionData.ended}, discarded=${sessionData.discarded})")
 
         lifecycleScope.launch {
             try {
@@ -402,16 +404,16 @@ class MainSessionActivity : AppCompatActivity() {
                 // Determine where to resume based on session state
                 if (isParticipantInfoComplete(sessionData)) {
                     // Participant info is complete, go to task selection
-                    Log.d("MainSession", "Resuming at task selection - participant info complete")
+                    DebugLogger.d("MainSession", "Resuming at task selection - participant info complete")
                     navigateToTaskSelection()
                 } else {
                     // Participant info incomplete, go to participant form
-                    Log.d("MainSession", "Resuming at participant info - info incomplete")
+                    DebugLogger.d("MainSession", "Resuming at participant info - info incomplete")
                     navigateToParticipantInfo()
                 }
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error resuming session", e)
+                DebugLogger.e("MainSession", "Error resuming session", e)
                 showError(getString(R.string.main_session_error_format, getString(R.string.main_session_error_resuming), e.message))
             }
         }
@@ -431,7 +433,7 @@ class MainSessionActivity : AppCompatActivity() {
      * Open settings screen
      */
     private fun openSettings() {
-        Log.d("MainSession", "Opening settings screen")
+        DebugLogger.d("MainSession", "Opening settings screen")
 
         val intent = Intent(this, SettingsActivity::class.java)
         startActivity(intent)
@@ -544,11 +546,11 @@ class MainSessionActivity : AppCompatActivity() {
                 if (endSession) {
                     // End current session and save data
                     SessionManager.endSession()
-                    Log.d("MainSession", "Ended current session before starting new one")
+                    DebugLogger.d("MainSession", "Ended current session before starting new one")
                 } else {
                     // Discard current session without saving
                     SessionManager.clearSession()
-                    Log.d("MainSession", "Discarded current session before starting new one")
+                    DebugLogger.d("MainSession", "Discarded current session before starting new one")
                 }
 
                 // Clear session state
@@ -559,7 +561,7 @@ class MainSessionActivity : AppCompatActivity() {
                 navigateToParticipantInfo()
 
             } catch (e: Exception) {
-                Log.e("MainSession", "Error handling current session", e)
+                DebugLogger.e("MainSession", "Error handling current session", e)
 
                 // Re-enable button and restore text
                 binding.btnNewSession.isEnabled = true

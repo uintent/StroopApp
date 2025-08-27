@@ -1,7 +1,6 @@
 package com.research.master.utils
 
 import android.content.Context
-import android.util.Log
 import com.research.shared.models.RuntimeConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,26 +54,26 @@ object MasterConfigManager {
                 is ConfigLoadResult.Success -> {
                     currentConfig = result.config
                     _configState.value = ConfigState.Loaded(result.config, result.source)
-                    Log.d(TAG, "Configuration loaded successfully from: ${result.source}")
+                    DebugLogger.d(TAG, "Configuration loaded successfully from: ${result.source}")
                     true
                 }
                 is ConfigLoadResult.Error -> {
                     val errorMessage = manager.getErrorMessage(result.error)
                     _configState.value = ConfigState.Error(errorMessage)
-                    Log.e(TAG, "Failed to load configuration: $errorMessage")
+                    DebugLogger.e(TAG, "Failed to load configuration: $errorMessage")
                     false
                 }
                 else -> {
                     val errorMessage = "Unknown configuration load result"
                     _configState.value = ConfigState.Error(errorMessage)
-                    Log.e(TAG, errorMessage)
+                    DebugLogger.e(TAG, errorMessage)
                     false
                 }
             }
         } catch (e: Exception) {
             val errorMessage = "Unexpected error loading configuration: ${e.message}"
             _configState.value = ConfigState.Error(errorMessage)
-            Log.e(TAG, errorMessage, e)
+            DebugLogger.e(TAG, errorMessage, e)
             false
         }
     }
@@ -90,7 +89,7 @@ object MasterConfigManager {
     fun updateRuntimeConfig(updatedConfig: RuntimeConfig) {
         currentConfig = updatedConfig
         _configState.value = ConfigState.Loaded(updatedConfig, "Runtime Update")
-        Log.d(TAG, "Runtime configuration updated")
+        DebugLogger.d(TAG, "Runtime configuration updated")
     }
 
     /**
@@ -104,7 +103,7 @@ object MasterConfigManager {
      * Reload configuration from file
      */
     suspend fun reloadConfiguration(): Boolean {
-        Log.d(TAG, "Reloading configuration...")
+        DebugLogger.d(TAG, "Reloading configuration...")
         return loadConfiguration()
     }
 
@@ -155,6 +154,6 @@ object MasterConfigManager {
     fun reset() {
         currentConfig = null
         _configState.value = ConfigState.NotLoaded
-        Log.d(TAG, "Configuration state reset")
+        DebugLogger.d(TAG, "Configuration state reset")
     }
 }

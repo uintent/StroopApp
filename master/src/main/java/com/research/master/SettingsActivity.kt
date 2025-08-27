@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
-import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.documentfile.provider.DocumentFile
@@ -12,29 +11,44 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.research.master.databinding.ActivitySettingsBinding
 import com.research.master.utils.FileManager
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
  * SettingsActivity - Configuration screen for app settings
- * Currently handles:
+ * Handles:
  * - Export folder selection for finished session JSON files
- * - Future: Other app settings can be added here
+ * - Debug logging settings (console logging, file logging, log file location)
  */
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var fileManager: FileManager
 
-    // Settings state
+    // Export settings state
     private var currentExportFolder: String = ""
     private var originalExportFolder: String = ""
 
-    // Folder picker launcher
-    private val folderPickerLauncher = registerForActivityResult(
+    // Debug settings state
+    private var isConsoleLoggingEnabled: Boolean = true
+    private var isFileLoggingEnabled: Boolean = false
+    private var currentLogFileFolder: String = ""
+    private var originalConsoleLoggingEnabled: Boolean = true
+    private var originalFileLoggingEnabled: Boolean = false
+    private var originalLogFileFolder: String = ""
+
+    // Folder picker launchers
+    private val exportFolderPickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
-        uri?.let { handleFolderSelected(it) }
+        uri?.let { handleExportFolderSelected(it) }
+    }
+
+    private val logFolderPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let { handleLogFolderSelected(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,11 +60,11 @@ class SettingsActivity : AppCompatActivity() {
         // Initialize FileManager
         fileManager = FileManager(this)
 
-        // Set up action bar (using the default one provided by theme)
+        // Set up action bar
         supportActionBar?.title = getString(R.string.settings_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        Log.d("SettingsActivity", "=== SETTINGS ACTIVITY STARTED ===")
+        DebugLogger.d("SettingsActivity", "=== SETTINGS ACTIVITY STARTED ===")
 
         // Load current settings
         loadCurrentSettings()
@@ -61,29 +75,47 @@ class SettingsActivity : AppCompatActivity() {
         // Update UI with current values
         updateUI()
 
-        Log.d("SettingsActivity", "Settings activity initialization complete")
+        DebugLogger.d("SettingsActivity", "Settings activity initialization complete")
     }
 
     /**
      * Load current settings from storage
      */
     private fun loadCurrentSettings() {
-        Log.d("SettingsActivity", "=== LOADING CURRENT SETTINGS ===")
+        DebugLogger.d("SettingsActivity", "=== LOADING CURRENT SETTINGS ===")
 
         try {
             // Load export folder setting
             currentExportFolder = fileManager.getExportFolder()
             originalExportFolder = currentExportFolder
 
-            Log.d("SettingsActivity", "Current export folder: $currentExportFolder")
-            Log.d("SettingsActivity", "Original export folder (for reset): $originalExportFolder")
+            // Load debug settings
+            isConsoleLoggingEnabled = fileManager.isConsoleLoggingEnabled()
+            isFileLoggingEnabled = fileManager.isFileLoggingEnabled()
+            currentLogFileFolder = fileManager.getLogFileFolder()
+
+            // Store original debug settings
+            originalConsoleLoggingEnabled = isConsoleLoggingEnabled
+            originalFileLoggingEnabled = isFileLoggingEnabled
+            originalLogFileFolder = currentLogFileFolder
+
+            DebugLogger.d("SettingsActivity", "Current export folder: $currentExportFolder")
+            DebugLogger.d("SettingsActivity", "Console logging enabled: $isConsoleLoggingEnabled")
+            DebugLogger.d("SettingsActivity", "File logging enabled: $isFileLoggingEnabled")
+            DebugLogger.d("SettingsActivity", "Log file folder: $currentLogFileFolder")
 
         } catch (e: Exception) {
-            Log.e("SettingsActivity", "Error loading settings", e)
+            DebugLogger.e("SettingsActivity", "Error loading settings", e)
 
             // Use default values on error
             currentExportFolder = getDefaultExportFolder()
             originalExportFolder = currentExportFolder
+            isConsoleLoggingEnabled = true
+            isFileLoggingEnabled = false
+            currentLogFileFolder = getDefaultLogFileFolder()
+            originalConsoleLoggingEnabled = isConsoleLoggingEnabled
+            originalFileLoggingEnabled = isFileLoggingEnabled
+            originalLogFileFolder = currentLogFileFolder
 
             Snackbar.make(
                 binding.root,
@@ -92,7 +124,7 @@ class SettingsActivity : AppCompatActivity() {
             ).show()
         }
 
-        Log.d("SettingsActivity", "=== SETTINGS LOADED ===")
+        DebugLogger.d("SettingsActivity", "=== SETTINGS LOADED ===")
     }
 
     /**
@@ -104,30 +136,56 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
+     * Get the default log file folder path
+     */
+    private fun getDefaultLogFileFolder(): String {
+        return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            getString(R.string.settings_default_log_folder_name)).absolutePath
+    }
+
+    /**
      * Set up button listeners
      */
     private fun setupButtonListeners() {
-        // Browse folder button
+        // Export folder buttons
         binding.btnBrowseFolder.setOnClickListener {
-            openFolderPicker()
+            openExportFolderPicker()
         }
 
-        // Reset folder to default button
         binding.btnResetFolderDefault.setOnClickListener {
-            resetFolderToDefault()
+            resetExportFolderToDefault()
         }
 
-        // Reset all settings button (revert to original values)
+        // Debug logging switches
+        binding.switchConsoleLogging.setOnCheckedChangeListener { _, isChecked ->
+            isConsoleLoggingEnabled = isChecked
+            DebugLogger.d("SettingsActivity", "Console logging toggled: $isConsoleLoggingEnabled")
+        }
+
+        binding.switchFileLogging.setOnCheckedChangeListener { _, isChecked ->
+            isFileLoggingEnabled = isChecked
+            updateLogFileControls()
+            DebugLogger.d("SettingsActivity", "File logging toggled: $isFileLoggingEnabled")
+        }
+
+        // Log file folder buttons
+        binding.btnBrowseLogFolder.setOnClickListener {
+            openLogFolderPicker()
+        }
+
+        binding.btnResetLogFolderDefault.setOnClickListener {
+            resetLogFolderToDefault()
+        }
+
+        // Main action buttons
         binding.btnResetSettings.setOnClickListener {
             resetAllSettings()
         }
 
-        // Confirm button (save and exit)
         binding.btnConfirmSettings.setOnClickListener {
             confirmSettings()
         }
 
-        // Cancel button (exit without saving changes)
         binding.btnCancelSettings.setOnClickListener {
             cancelSettings()
         }
@@ -137,21 +195,28 @@ class SettingsActivity : AppCompatActivity() {
      * Update UI elements with current values
      */
     private fun updateUI() {
-        Log.d("SettingsActivity", "=== UPDATING UI ===")
+        DebugLogger.d("SettingsActivity", "=== UPDATING UI ===")
 
         // Update export folder display
         binding.textCurrentExportFolder.text = currentExportFolder
+        updateExportFolderInfo()
 
-        // Update folder info
-        updateFolderInfo()
+        // Update debug logging switches
+        binding.switchConsoleLogging.isChecked = isConsoleLoggingEnabled
+        binding.switchFileLogging.isChecked = isFileLoggingEnabled
 
-        Log.d("SettingsActivity", "UI updated with current settings")
+        // Update log file folder display and controls
+        binding.textCurrentLogFileFolder.text = currentLogFileFolder
+        updateLogFolderInfo()
+        updateLogFileControls()
+
+        DebugLogger.d("SettingsActivity", "UI updated with current settings")
     }
 
     /**
-     * Update folder information display
+     * Update export folder information display
      */
-    private fun updateFolderInfo() {
+    private fun updateExportFolderInfo() {
         val folder = File(currentExportFolder)
 
         val folderInfo = when {
@@ -166,27 +231,92 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        binding.textFolderInfo.text = folderInfo
+        binding.textExportFolderInfo.text = folderInfo
 
-        // Update folder status icon/color
+        // Update folder status color
         val isValid = folder.exists() && folder.isDirectory && fileManager.validateExportFolder(folder)
-        if (isValid) {
-            binding.textFolderInfo.setTextColor(getColor(android.R.color.holo_green_dark))
+        val color = if (isValid) {
+            getColor(android.R.color.holo_green_dark)
         } else {
-            binding.textFolderInfo.setTextColor(getColor(android.R.color.holo_red_dark))
+            getColor(android.R.color.holo_red_dark)
         }
+        binding.textExportFolderInfo.setTextColor(color)
     }
 
     /**
-     * Open system folder picker
+     * Update log file folder information display
      */
-    private fun openFolderPicker() {
-        Log.d("SettingsActivity", "Opening folder picker")
+    private fun updateLogFolderInfo() {
+        if (!isFileLoggingEnabled) {
+            binding.textLogFolderInfo.text = getString(R.string.settings_log_folder_disabled)
+            binding.textLogFolderInfo.setTextColor(getColor(android.R.color.darker_gray))
+            return
+        }
 
+        val folder = File(currentLogFileFolder)
+
+        val folderInfo = when {
+            !folder.exists() -> getString(R.string.settings_log_folder_not_exist)
+            !folder.isDirectory -> getString(R.string.settings_log_folder_not_directory)
+            !folder.canWrite() -> getString(R.string.settings_log_folder_not_writable)
+            else -> {
+                val logFileCount = folder.listFiles { file ->
+                    file.name.endsWith(".log") || file.name.endsWith(".txt")
+                }?.size ?: 0
+                getString(R.string.settings_log_folder_valid, logFileCount)
+            }
+        }
+
+        binding.textLogFolderInfo.text = folderInfo
+
+        // Update folder status color
+        val isValid = folder.exists() && folder.isDirectory && folder.canWrite()
+        val color = if (isValid) {
+            getColor(android.R.color.holo_green_dark)
+        } else {
+            getColor(android.R.color.holo_red_dark)
+        }
+        binding.textLogFolderInfo.setTextColor(color)
+    }
+
+    /**
+     * Update log file controls based on file logging enabled state
+     */
+    private fun updateLogFileControls() {
+        val enabled = isFileLoggingEnabled
+
+        binding.textCurrentLogFileFolder.isEnabled = enabled
+        binding.btnBrowseLogFolder.isEnabled = enabled
+        binding.btnResetLogFolderDefault.isEnabled = enabled
+        binding.textLogFolderInfo.isEnabled = enabled
+
+        // Update folder info display
+        updateLogFolderInfo()
+    }
+
+    /**
+     * Open system folder picker for export folder
+     */
+    private fun openExportFolderPicker() {
+        DebugLogger.d("SettingsActivity", "Opening export folder picker")
+        openFolderPicker(currentExportFolder, exportFolderPickerLauncher)
+    }
+
+    /**
+     * Open system folder picker for log file folder
+     */
+    private fun openLogFolderPicker() {
+        DebugLogger.d("SettingsActivity", "Opening log folder picker")
+        openFolderPicker(currentLogFileFolder, logFolderPickerLauncher)
+    }
+
+    /**
+     * Generic folder picker opener
+     */
+    private fun openFolderPicker(currentPath: String, launcher: androidx.activity.result.ActivityResultLauncher<Uri?>) {
         try {
-            // For OpenDocumentTree contract, we can pass a Uri to suggest starting location
-            val startUri: Uri? = if (currentExportFolder.isNotEmpty() && !currentExportFolder.startsWith("content://")) {
-                val currentFolder = File(currentExportFolder)
+            val startUri: Uri? = if (currentPath.isNotEmpty() && !currentPath.startsWith("content://")) {
+                val currentFolder = File(currentPath)
                 if (currentFolder.exists()) {
                     Uri.fromFile(currentFolder)
                 } else {
@@ -196,10 +326,10 @@ class SettingsActivity : AppCompatActivity() {
                 null
             }
 
-            folderPickerLauncher.launch(startUri)
+            launcher.launch(startUri)
 
         } catch (e: Exception) {
-            Log.e("SettingsActivity", "Error opening folder picker", e)
+            DebugLogger.e("SettingsActivity", "Error opening folder picker", e)
             Snackbar.make(
                 binding.root,
                 getString(R.string.settings_folder_picker_error, e.message),
@@ -209,11 +339,33 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Handle folder selection from picker
+     * Handle export folder selection from picker
      */
-    private fun handleFolderSelected(uri: Uri) {
-        Log.d("SettingsActivity", "Folder selected: $uri")
+    private fun handleExportFolderSelected(uri: Uri) {
+        DebugLogger.d("SettingsActivity", "Export folder selected: $uri")
+        handleFolderSelected(uri) { folderPath ->
+            currentExportFolder = folderPath
+            updateExportFolderInfo()
+            binding.textCurrentExportFolder.text = currentExportFolder
+        }
+    }
 
+    /**
+     * Handle log folder selection from picker
+     */
+    private fun handleLogFolderSelected(uri: Uri) {
+        DebugLogger.d("SettingsActivity", "Log folder selected: $uri")
+        handleFolderSelected(uri) { folderPath ->
+            currentLogFileFolder = folderPath
+            updateLogFolderInfo()
+            binding.textCurrentLogFileFolder.text = currentLogFileFolder
+        }
+    }
+
+    /**
+     * Generic folder selection handler
+     */
+    private fun handleFolderSelected(uri: Uri, onSuccess: (String) -> Unit) {
         try {
             // Take persistable permission
             contentResolver.takePersistableUriPermission(
@@ -225,15 +377,9 @@ class SettingsActivity : AppCompatActivity() {
             val documentFile = DocumentFile.fromTreeUri(this, uri)
             if (documentFile != null && documentFile.isDirectory) {
 
-                // For Android's document tree URIs, we need to handle this specially
-                // Try to get a real path, or use the URI directly
                 val folderPath = getFolderPathFromUri(uri) ?: uri.toString()
 
-                currentExportFolder = folderPath
-                Log.d("SettingsActivity", "Export folder updated to: $currentExportFolder")
-
-                // Update UI
-                updateUI()
+                onSuccess(folderPath)
 
                 // Test write permissions
                 testFolderWritePermissions(documentFile)
@@ -245,7 +391,7 @@ class SettingsActivity : AppCompatActivity() {
                 ).show()
 
             } else {
-                Log.e("SettingsActivity", "Selected URI is not a valid directory")
+                DebugLogger.e("SettingsActivity", "Selected URI is not a valid directory")
                 Snackbar.make(
                     binding.root,
                     getString(R.string.settings_folder_invalid),
@@ -254,7 +400,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
         } catch (e: Exception) {
-            Log.e("SettingsActivity", "Error processing selected folder", e)
+            DebugLogger.e("SettingsActivity", "Error processing selected folder", e)
             Snackbar.make(
                 binding.root,
                 getString(R.string.settings_folder_process_error, e.message),
@@ -268,7 +414,6 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun getFolderPathFromUri(uri: Uri): String? {
         return try {
-            // For some URIs we can extract the real path
             val docId = uri.lastPathSegment
             if (docId?.contains(":") == true) {
                 val parts = docId.split(":")
@@ -276,15 +421,14 @@ class SettingsActivity : AppCompatActivity() {
                     val storageId = parts[0]
                     val path = parts[1]
 
-                    // Try to map to real storage paths
                     when (storageId.lowercase()) {
                         "primary" -> "${Environment.getExternalStorageDirectory()}/$path"
-                        else -> null // External SD cards are harder to map
+                        else -> null
                     }
                 } else null
             } else null
         } catch (e: Exception) {
-            Log.w("SettingsActivity", "Could not extract path from URI: $uri", e)
+            DebugLogger.w("SettingsActivity", "Could not extract path from URI: $uri", e)
             null
         }
     }
@@ -294,25 +438,20 @@ class SettingsActivity : AppCompatActivity() {
      */
     private fun testFolderWritePermissions(documentFile: DocumentFile) {
         try {
-            // Try to create a test file
-            val testFile = documentFile.createFile("application/json", "test_${System.currentTimeMillis()}.json")
+            val testFile = documentFile.createFile("text/plain", "test_${System.currentTimeMillis()}.txt")
 
             if (testFile != null) {
-                // Write test content
                 contentResolver.openOutputStream(testFile.uri)?.use { output ->
-                    output.write("{\"test\": true}".toByteArray())
+                    output.write("test".toByteArray())
                 }
-
-                // Delete test file
                 testFile.delete()
-
-                Log.d("SettingsActivity", "Folder write test successful")
+                DebugLogger.d("SettingsActivity", "Folder write test successful")
             } else {
-                Log.w("SettingsActivity", "Could not create test file - may have permission issues")
+                DebugLogger.w("SettingsActivity", "Could not create test file - may have permission issues")
             }
 
         } catch (e: Exception) {
-            Log.w("SettingsActivity", "Folder write test failed", e)
+            DebugLogger.w("SettingsActivity", "Folder write test failed", e)
             Snackbar.make(
                 binding.root,
                 getString(R.string.settings_folder_write_test_failed),
@@ -324,11 +463,12 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * Reset export folder to default location
      */
-    private fun resetFolderToDefault() {
-        Log.d("SettingsActivity", "Resetting folder to default")
+    private fun resetExportFolderToDefault() {
+        DebugLogger.d("SettingsActivity", "Resetting export folder to default")
 
         currentExportFolder = getDefaultExportFolder()
-        updateUI()
+        binding.textCurrentExportFolder.text = currentExportFolder
+        updateExportFolderInfo()
 
         Snackbar.make(
             binding.root,
@@ -338,12 +478,33 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Reset all settings to their original values (when screen was opened)
+     * Reset log folder to default location
+     */
+    private fun resetLogFolderToDefault() {
+        DebugLogger.d("SettingsActivity", "Resetting log folder to default")
+
+        currentLogFileFolder = getDefaultLogFileFolder()
+        binding.textCurrentLogFileFolder.text = currentLogFileFolder
+        updateLogFolderInfo()
+
+        Snackbar.make(
+            binding.root,
+            getString(R.string.settings_log_folder_reset_default),
+            Snackbar.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Reset all settings to their original values
      */
     private fun resetAllSettings() {
-        Log.d("SettingsActivity", "Resetting all settings to original values")
+        DebugLogger.d("SettingsActivity", "Resetting all settings to original values")
 
         currentExportFolder = originalExportFolder
+        isConsoleLoggingEnabled = originalConsoleLoggingEnabled
+        isFileLoggingEnabled = originalFileLoggingEnabled
+        currentLogFileFolder = originalLogFileFolder
+
         updateUI()
 
         Snackbar.make(
@@ -357,35 +518,38 @@ class SettingsActivity : AppCompatActivity() {
      * Confirm and save settings
      */
     private fun confirmSettings() {
-        Log.d("SettingsActivity", "=== CONFIRMING SETTINGS ===")
+        DebugLogger.d("SettingsActivity", "=== CONFIRMING SETTINGS ===")
 
         lifecycleScope.launch {
             try {
-                // Validate settings before saving
                 if (!validateSettings()) {
                     return@launch
                 }
 
-                // Save export folder setting
+                // Save all settings
                 fileManager.setExportFolder(currentExportFolder)
+                fileManager.setConsoleLoggingEnabled(isConsoleLoggingEnabled)
+                fileManager.setFileLoggingEnabled(isFileLoggingEnabled)
+                fileManager.setLogFileFolder(currentLogFileFolder)
 
-                Log.d("SettingsActivity", "Settings saved successfully")
-                Log.d("SettingsActivity", "Export folder: $currentExportFolder")
+                DebugLogger.d("SettingsActivity", "Settings saved successfully")
+                DebugLogger.d("SettingsActivity", "Export folder: $currentExportFolder")
+                DebugLogger.d("SettingsActivity", "Console logging: $isConsoleLoggingEnabled")
+                DebugLogger.d("SettingsActivity", "File logging: $isFileLoggingEnabled")
+                DebugLogger.d("SettingsActivity", "Log file folder: $currentLogFileFolder")
 
-                // Show success message
                 Snackbar.make(
                     binding.root,
                     getString(R.string.settings_saved_successfully),
                     Snackbar.LENGTH_SHORT
                 ).show()
 
-                // Return to main session activity after a brief delay
                 binding.root.postDelayed({
                     navigateBackToMainSession()
                 }, 1000)
 
             } catch (e: Exception) {
-                Log.e("SettingsActivity", "Error saving settings", e)
+                DebugLogger.e("SettingsActivity", "Error saving settings", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.settings_save_error, e.message),
@@ -409,7 +573,6 @@ class SettingsActivity : AppCompatActivity() {
             return false
         }
 
-        // If it's a file path (not URI), check if writable
         if (!currentExportFolder.startsWith("content://")) {
             val folder = File(currentExportFolder)
             if (!fileManager.validateExportFolder(folder)) {
@@ -422,6 +585,30 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        // Validate log file folder if file logging is enabled
+        if (isFileLoggingEnabled) {
+            if (currentLogFileFolder.isBlank()) {
+                Snackbar.make(
+                    binding.root,
+                    getString(R.string.settings_log_folder_required),
+                    Snackbar.LENGTH_LONG
+                ).show()
+                return false
+            }
+
+            if (!currentLogFileFolder.startsWith("content://")) {
+                val logFolder = File(currentLogFileFolder)
+                if (!logFolder.exists() || !logFolder.isDirectory || !logFolder.canWrite()) {
+                    Snackbar.make(
+                        binding.root,
+                        getString(R.string.settings_log_folder_invalid),
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                    return false
+                }
+            }
+        }
+
         return true
     }
 
@@ -429,11 +616,15 @@ class SettingsActivity : AppCompatActivity() {
      * Cancel settings without saving changes
      */
     private fun cancelSettings() {
-        Log.d("SettingsActivity", "Canceling settings without saving")
+        DebugLogger.d("SettingsActivity", "Canceling settings without saving")
 
         // Check if there are unsaved changes
-        if (currentExportFolder != originalExportFolder) {
-            // Show confirmation dialog
+        val hasChanges = currentExportFolder != originalExportFolder ||
+                isConsoleLoggingEnabled != originalConsoleLoggingEnabled ||
+                isFileLoggingEnabled != originalFileLoggingEnabled ||
+                currentLogFileFolder != originalLogFileFolder
+
+        if (hasChanges) {
             androidx.appcompat.app.AlertDialog.Builder(this)
                 .setTitle(getString(R.string.settings_unsaved_changes_title))
                 .setMessage(getString(R.string.settings_unsaved_changes_message))
@@ -445,7 +636,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 .show()
         } else {
-            // No changes, close directly
             navigateBackToMainSession()
         }
     }
@@ -454,7 +644,7 @@ class SettingsActivity : AppCompatActivity() {
      * Navigate back to MainSessionActivity
      */
     private fun navigateBackToMainSession() {
-        Log.d("SettingsActivity", "Navigating back to MainSessionActivity")
+        DebugLogger.d("SettingsActivity", "Navigating back to MainSessionActivity")
 
         val intent = Intent(this, MainSessionActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -462,17 +652,11 @@ class SettingsActivity : AppCompatActivity() {
         finish()
     }
 
-    /**
-     * Handle toolbar back navigation
-     */
     override fun onSupportNavigateUp(): Boolean {
         cancelSettings()
         return true
     }
 
-    /**
-     * Handle Android back button
-     */
     override fun onBackPressed() {
         super.onBackPressed()
         cancelSettings()

@@ -2,7 +2,6 @@ package com.research.master
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -10,6 +9,7 @@ import com.research.master.databinding.ActivityAsqBinding
 import com.research.master.utils.SessionManager
 import com.research.master.utils.TaskCompletionData
 import com.research.master.utils.FileManager
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +47,9 @@ class ASQActivity : AppCompatActivity() {
         binding = ActivityAsqBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
+
         // Initialize FileManager
         fileManager = FileManager(this)
 
@@ -55,7 +58,7 @@ class ASQActivity : AppCompatActivity() {
         supportActionBar?.title = getString(R.string.asq_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        Log.d("ASQActivity", "=== ASQ ACTIVITY STARTED ===")
+        DebugLogger.d("ASQActivity", "=== ASQ ACTIVITY STARTED ===")
 
         // Extract data from intent
         extractIntentData()
@@ -66,7 +69,7 @@ class ASQActivity : AppCompatActivity() {
         // Set up button listeners
         setupButtons()
 
-        Log.d("ASQActivity", "ASQ setup complete")
+        DebugLogger.d("ASQActivity", "ASQ setup complete")
     }
 
     /**
@@ -74,7 +77,7 @@ class ASQActivity : AppCompatActivity() {
      * ENHANCED: Now extracts task list context for proper navigation
      */
     private fun extractIntentData() {
-        Log.d("ASQActivity", "=== EXTRACTING INTENT DATA ===")
+        DebugLogger.d("ASQActivity", "=== EXTRACTING INTENT DATA ===")
 
         // Extract task number and iteration counter
         taskNumber = intent.getIntExtra("TASK_NUMBER", 0)
@@ -90,16 +93,16 @@ class ASQActivity : AppCompatActivity() {
         taskListLabel = intent.getStringExtra("TASK_LIST_LABEL")
         isInTaskList = taskListId != null
 
-        Log.d("ASQActivity", "Task Number: $taskNumber")
-        Log.d("ASQActivity", "Task ID: $taskId")
-        Log.d("ASQActivity", "Iteration Counter: $iterationCounter")
-        Log.d("ASQActivity", "Task Label: $taskLabel")
-        Log.d("ASQActivity", "Session ID: $sessionId")
-        Log.d("ASQActivity", "Individual Task: $isIndividualTask")
-        Log.d("ASQActivity", "Task List ID: $taskListId")
-        Log.d("ASQActivity", "Is In Task List: $isInTaskList")
+        DebugLogger.d("ASQActivity", "Task Number: $taskNumber")
+        DebugLogger.d("ASQActivity", "Task ID: $taskId")
+        DebugLogger.d("ASQActivity", "Iteration Counter: $iterationCounter")
+        DebugLogger.d("ASQActivity", "Task Label: $taskLabel")
+        DebugLogger.d("ASQActivity", "Session ID: $sessionId")
+        DebugLogger.d("ASQActivity", "Individual Task: $isIndividualTask")
+        DebugLogger.d("ASQActivity", "Task List ID: $taskListId")
+        DebugLogger.d("ASQActivity", "Is In Task List: $isInTaskList")
 
-        Log.d("ASQActivity", "=== INTENT DATA EXTRACTION COMPLETE ===")
+        DebugLogger.d("ASQActivity", "=== INTENT DATA EXTRACTION COMPLETE ===")
     }
 
     /**
@@ -107,7 +110,7 @@ class ASQActivity : AppCompatActivity() {
      * Shows iteration information
      */
     private fun setupUI() {
-        Log.d("ASQActivity", "=== SETTING UP UI ===")
+        DebugLogger.d("ASQActivity", "=== SETTING UP UI ===")
 
         // Display task information - shows iteration info
         binding.textTaskTitle.text = taskLabel ?: getString(R.string.asq_unknown_task)
@@ -122,17 +125,17 @@ class ASQActivity : AppCompatActivity() {
         // Set up radio group listeners
         setupRadioGroupListener(binding.radioGroupEase) { selectedValue ->
             asqEaseResponse = selectedValue
-            Log.d("ASQActivity", "ASQ Ease response: $asqEaseResponse")
+            DebugLogger.d("ASQActivity", "ASQ Ease response: $asqEaseResponse")
         }
 
         setupRadioGroupListener(binding.radioGroupTime) { selectedValue ->
             asqTimeResponse = selectedValue
-            Log.d("ASQActivity", "ASQ Time response: $asqTimeResponse")
+            DebugLogger.d("ASQActivity", "ASQ Time response: $asqTimeResponse")
         }
 
         // Continue button is always enabled
 
-        Log.d("ASQActivity", "UI setup complete")
+        DebugLogger.d("ASQActivity", "UI setup complete")
     }
 
     /**
@@ -192,11 +195,11 @@ class ASQActivity : AppCompatActivity() {
      * ENHANCED: Context-aware navigation after saving
      */
     private fun saveASQDataAndContinue() {
-        Log.d("ASQActivity", "=== SAVING ASQ DATA ===")
-        Log.d("ASQActivity", "Task Number: $taskNumber")
-        Log.d("ASQActivity", "Iteration Counter: $iterationCounter")
-        Log.d("ASQActivity", "Ease response: $asqEaseResponse")
-        Log.d("ASQActivity", "Time response: $asqTimeResponse")
+        DebugLogger.d("ASQActivity", "=== SAVING ASQ DATA ===")
+        DebugLogger.d("ASQActivity", "Task Number: $taskNumber")
+        DebugLogger.d("ASQActivity", "Iteration Counter: $iterationCounter")
+        DebugLogger.d("ASQActivity", "Ease response: $asqEaseResponse")
+        DebugLogger.d("ASQActivity", "Time response: $asqTimeResponse")
 
         lifecycleScope.launch {
             try {
@@ -208,7 +211,7 @@ class ASQActivity : AppCompatActivity() {
 
                 SessionManager.updateTaskASQData(taskNumber, iterationCounter, asqData)
 
-                Log.d("ASQActivity", "ASQ data saved successfully")
+                DebugLogger.d("ASQActivity", "ASQ data saved successfully")
 
                 Snackbar.make(
                     binding.root,
@@ -222,7 +225,7 @@ class ASQActivity : AppCompatActivity() {
                 }, 1000)
 
             } catch (e: Exception) {
-                Log.e("ASQActivity", "Failed to save ASQ data", e)
+                DebugLogger.e("ASQActivity", "Failed to save ASQ data", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.asq_save_error, e.message),
@@ -241,7 +244,7 @@ class ASQActivity : AppCompatActivity() {
             .setTitle(getString(R.string.asq_skip_title))
             .setMessage(getString(R.string.asq_skip_message))
             .setPositiveButton(getString(R.string.asq_skip_confirm)) { _, _ ->
-                Log.d("ASQActivity", "ASQ skipped by user")
+                DebugLogger.d("ASQActivity", "ASQ skipped by user")
                 navigateToTaskSelection()
             }
             .setNegativeButton(getString(R.string.asq_skip_cancel)) { dialog, _ ->
@@ -255,7 +258,7 @@ class ASQActivity : AppCompatActivity() {
      * NEW: Returns user to the task summary for revision/review
      */
     private fun navigateBackToTaskSummary() {
-        Log.d("ASQActivity", "Navigating back to TaskSummaryActivity")
+        DebugLogger.d("ASQActivity", "Navigating back to TaskSummaryActivity")
 
         val intent = Intent(this, TaskSummaryActivity::class.java).apply {
             // Pass all the original task data back
@@ -287,7 +290,7 @@ class ASQActivity : AppCompatActivity() {
      * ENHANCED: Respects task list context for proper return navigation
      */
     private fun navigateToTaskSelection() {
-        Log.d("ASQActivity", "Navigating to TaskSelectionActivity with context")
+        DebugLogger.d("ASQActivity", "Navigating to TaskSelectionActivity with context")
 
         val intent = Intent(this, TaskSelectionActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -296,9 +299,9 @@ class ASQActivity : AppCompatActivity() {
             if (isInTaskList) {
                 putExtra("TASK_LIST_ID", taskListId)
                 putExtra("TASK_LIST_LABEL", taskListLabel)
-                Log.d("ASQActivity", "Returning to task list: $taskListId")
+                DebugLogger.d("ASQActivity", "Returning to task list: $taskListId")
             } else {
-                Log.d("ASQActivity", "Returning to global task selection")
+                DebugLogger.d("ASQActivity", "Returning to global task selection")
             }
         }
 
@@ -311,7 +314,7 @@ class ASQActivity : AppCompatActivity() {
      * ENHANCED: Returns to task summary instead of task selection
      */
     override fun onSupportNavigateUp(): Boolean {
-        Log.d("ASQActivity", "Back navigation pressed - returning to TaskSummaryActivity")
+        DebugLogger.d("ASQActivity", "Back navigation pressed - returning to TaskSummaryActivity")
         navigateBackToTaskSummary()
         return true
     }
@@ -321,7 +324,7 @@ class ASQActivity : AppCompatActivity() {
      * ENHANCED: Returns to task summary instead of task selection
      */
     override fun onBackPressed() {
-        Log.d("ASQActivity", "Back button pressed - returning to TaskSummaryActivity")
+        DebugLogger.d("ASQActivity", "Back button pressed - returning to TaskSummaryActivity")
         navigateBackToTaskSummary()
         // No super call needed since navigateBackToTaskSummary() calls finish()
     }

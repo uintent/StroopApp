@@ -2,7 +2,6 @@ package com.research.master
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -11,6 +10,7 @@ import com.research.master.utils.SessionManager
 import com.research.master.utils.TaskCompletionData
 import com.research.master.utils.FileManager
 import com.research.master.utils.MasterConfigManager
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +83,9 @@ class TaskSummaryActivity : AppCompatActivity() {
         binding = ActivityTaskSummaryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
+
         // Initialize FileManager
         fileManager = FileManager(this)
 
@@ -91,7 +94,7 @@ class TaskSummaryActivity : AppCompatActivity() {
         supportActionBar?.title = getString(R.string.task_summary_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        Log.d("TaskSummary", "=== TASK SUMMARY ACTIVITY STARTED ===")
+        DebugLogger.d("TaskSummary", "=== TASK SUMMARY ACTIVITY STARTED ===")
 
         // Extract data from intent
         extractIntentData()
@@ -108,7 +111,7 @@ class TaskSummaryActivity : AppCompatActivity() {
         // Set up button listeners with context-aware behavior
         setupButtons(metrics)
 
-        Log.d("TaskSummary", "Task summary setup complete")
+        DebugLogger.d("TaskSummary", "Task summary setup complete")
     }
 
     /**
@@ -116,7 +119,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * UPDATED: Now extracts task list context
      */
     private fun extractIntentData() {
-        Log.d("TaskSummary", "=== EXTRACTING INTENT DATA ===")
+        DebugLogger.d("TaskSummary", "=== EXTRACTING INTENT DATA ===")
 
         // UPDATED: Extract task number and iteration counter
         taskNumber = intent.getIntExtra("TASK_NUMBER", 0)
@@ -140,14 +143,14 @@ class TaskSummaryActivity : AppCompatActivity() {
         taskListLabel = intent.getStringExtra("TASK_LIST_LABEL")
         isInTaskList = taskListId != null
 
-        Log.d("TaskSummary", "Task Number: $taskNumber")
-        Log.d("TaskSummary", "Task ID: $taskId")
-        Log.d("TaskSummary", "Iteration Counter: $iterationCounter")
-        Log.d("TaskSummary", "Task Label: $taskLabel")
-        Log.d("TaskSummary", "End Condition: $originalEndCondition")
-        Log.d("TaskSummary", "Is Individual Task: $isIndividualTask")
-        Log.d("TaskSummary", "Task List ID: $taskListId")
-        Log.d("TaskSummary", "Time on Task: ${timeOnTaskMs}ms")
+        DebugLogger.d("TaskSummary", "Task Number: $taskNumber")
+        DebugLogger.d("TaskSummary", "Task ID: $taskId")
+        DebugLogger.d("TaskSummary", "Iteration Counter: $iterationCounter")
+        DebugLogger.d("TaskSummary", "Task Label: $taskLabel")
+        DebugLogger.d("TaskSummary", "End Condition: $originalEndCondition")
+        DebugLogger.d("TaskSummary", "Is Individual Task: $isIndividualTask")
+        DebugLogger.d("TaskSummary", "Task List ID: $taskListId")
+        DebugLogger.d("TaskSummary", "Time on Task: ${timeOnTaskMs}ms")
 
         // Extract raw stroop data arrays
         val stroopIndices = intent.getIntArrayExtra("STROOP_INDICES") ?: intArrayOf()
@@ -158,10 +161,10 @@ class TaskSummaryActivity : AppCompatActivity() {
         val stroopStartTimes = intent.getLongArrayExtra("STROOP_START_TIMES") ?: longArrayOf()
         val stroopResponseTimes = intent.getLongArrayExtra("STROOP_RESPONSE_TIMES") ?: longArrayOf()
 
-        Log.d("TaskSummary", "Raw stroop data arrays:")
-        Log.d("TaskSummary", "  Indices: ${stroopIndices.size} entries")
-        Log.d("TaskSummary", "  Words: ${stroopWords.size} entries")
-        Log.d("TaskSummary", "  Responses: ${stroopResponseTypes.size} entries")
+        DebugLogger.d("TaskSummary", "Raw stroop data arrays:")
+        DebugLogger.d("TaskSummary", "  Indices: ${stroopIndices.size} entries")
+        DebugLogger.d("TaskSummary", "  Words: ${stroopWords.size} entries")
+        DebugLogger.d("TaskSummary", "  Responses: ${stroopResponseTypes.size} entries")
 
         // Convert arrays to structured data
         stroopResponses = stroopIndices.indices.map { i ->
@@ -176,8 +179,8 @@ class TaskSummaryActivity : AppCompatActivity() {
             )
         }
 
-        Log.d("TaskSummary", "Converted to ${stroopResponses.size} stroop response objects")
-        Log.d("TaskSummary", "=== INTENT DATA EXTRACTION COMPLETE ===")
+        DebugLogger.d("TaskSummary", "Converted to ${stroopResponses.size} stroop response objects")
+        DebugLogger.d("TaskSummary", "=== INTENT DATA EXTRACTION COMPLETE ===")
     }
 
     /**
@@ -186,7 +189,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      */
     private fun determineTaskListContext() {
         if (!isInTaskList || taskListId == null) {
-            Log.d("TaskSummary", "Not in task list mode - individual task")
+            DebugLogger.d("TaskSummary", "Not in task list mode - individual task")
             return
         }
 
@@ -194,13 +197,13 @@ class TaskSummaryActivity : AppCompatActivity() {
             try {
                 val config = MasterConfigManager.getCurrentConfig()
                 if (config == null) {
-                    Log.e("TaskSummary", "No config available for task list analysis")
+                    DebugLogger.e("TaskSummary", "No config available for task list analysis")
                     return@launch
                 }
 
                 val taskListConfig = config.baseConfig.taskLists[taskListId]
                 if (taskListConfig == null) {
-                    Log.e("TaskSummary", "Task list '$taskListId' not found in config")
+                    DebugLogger.e("TaskSummary", "Task list '$taskListId' not found in config")
                     return@launch
                 }
 
@@ -208,7 +211,7 @@ class TaskSummaryActivity : AppCompatActivity() {
                 val currentTaskIndex = taskIds.indexOf(taskId)
 
                 if (currentTaskIndex == -1) {
-                    Log.w("TaskSummary", "Current task '$taskId' not found in task list sequence")
+                    DebugLogger.w("TaskSummary", "Current task '$taskId' not found in task list sequence")
                     isLastTaskInList = true
                     return@launch
                 }
@@ -221,22 +224,22 @@ class TaskSummaryActivity : AppCompatActivity() {
                     val nextTaskIdCandidate = taskIds[currentTaskIndex + 1]
                     if (config.baseConfig.tasks.containsKey(nextTaskIdCandidate)) {
                         nextTaskId = nextTaskIdCandidate
-                        Log.d("TaskSummary", "Next task in list: $nextTaskId")
+                        DebugLogger.d("TaskSummary", "Next task in list: $nextTaskId")
                     } else {
-                        Log.w("TaskSummary", "Next task '$nextTaskIdCandidate' not found in config")
+                        DebugLogger.w("TaskSummary", "Next task '$nextTaskIdCandidate' not found in config")
                         isLastTaskInList = true
                     }
                 } else {
-                    Log.d("TaskSummary", "This is the last task in the list")
+                    DebugLogger.d("TaskSummary", "This is the last task in the list")
                 }
 
-                Log.d("TaskSummary", "Task list analysis complete:")
-                Log.d("TaskSummary", "  Task position: ${currentTaskIndex + 1}/${taskIds.size}")
-                Log.d("TaskSummary", "  Is last task: $isLastTaskInList")
-                Log.d("TaskSummary", "  Next task ID: $nextTaskId")
+                DebugLogger.d("TaskSummary", "Task list analysis complete:")
+                DebugLogger.d("TaskSummary", "  Task position: ${currentTaskIndex + 1}/${taskIds.size}")
+                DebugLogger.d("TaskSummary", "  Is last task: $isLastTaskInList")
+                DebugLogger.d("TaskSummary", "  Next task ID: $nextTaskId")
 
             } catch (e: Exception) {
-                Log.e("TaskSummary", "Error analyzing task list context", e)
+                DebugLogger.e("TaskSummary", "Error analyzing task list context", e)
                 isLastTaskInList = true
             }
         }
@@ -246,10 +249,10 @@ class TaskSummaryActivity : AppCompatActivity() {
      * Calculate aggregated metrics from raw stroop data
      */
     private fun calculateMetrics(): TaskMetrics {
-        Log.d("TaskSummary", "=== CALCULATING METRICS ===")
+        DebugLogger.d("TaskSummary", "=== CALCULATING METRICS ===")
 
         if (stroopResponses.isEmpty()) {
-            Log.w("TaskSummary", getString(R.string.task_summary_no_responses_warning))
+            DebugLogger.w("TaskSummary", getString(R.string.task_summary_no_responses_warning))
             return TaskMetrics(0, 0, null, 0, null, null, 0, timeOnTaskMs / 1000.0)
         }
 
@@ -258,11 +261,11 @@ class TaskSummaryActivity : AppCompatActivity() {
         val incorrectResponses = stroopResponses.filter { it.response == "INCORRECT" }
         val missedResponses = stroopResponses.filter { it.response == "MISSED" }
 
-        Log.d("TaskSummary", "Response breakdown:")
-        Log.d("TaskSummary", "  Correct: ${correctResponses.size}")
-        Log.d("TaskSummary", "  Incorrect: ${incorrectResponses.size}")
-        Log.d("TaskSummary", "  Missed: ${missedResponses.size}")
-        Log.d("TaskSummary", "  Total: ${stroopResponses.size}")
+        DebugLogger.d("TaskSummary", "Response breakdown:")
+        DebugLogger.d("TaskSummary", "  Correct: ${correctResponses.size}")
+        DebugLogger.d("TaskSummary", "  Incorrect: ${incorrectResponses.size}")
+        DebugLogger.d("TaskSummary", "  Missed: ${missedResponses.size}")
+        DebugLogger.d("TaskSummary", "  Total: ${stroopResponses.size}")
 
         // Calculate reaction times (only for responses that weren't missed)
         val correctReactionTimes = correctResponses.filter { it.reactionTimeMs > 0 }.map { it.reactionTimeMs.toDouble() }
@@ -295,7 +298,7 @@ class TaskSummaryActivity : AppCompatActivity() {
             timeOnTaskSeconds = timeOnTaskSeconds
         )
 
-        Log.d("TaskSummary", "=== METRICS CALCULATION COMPLETE ===")
+        DebugLogger.d("TaskSummary", "=== METRICS CALCULATION COMPLETE ===")
         return metrics
     }
 
@@ -304,7 +307,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * UPDATED: Shows task number and iteration counter
      */
     private fun displayTaskSummary(metrics: TaskMetrics) {
-        Log.d("TaskSummary", "=== DISPLAYING TASK SUMMARY ===")
+        DebugLogger.d("TaskSummary", "=== DISPLAYING TASK SUMMARY ===")
 
         // Task header - UPDATED to show iteration info
         binding.textTaskTitle.text = taskLabel ?: getString(R.string.task_summary_unknown_task)
@@ -343,7 +346,7 @@ class TaskSummaryActivity : AppCompatActivity() {
         binding.textFinalRating.text = getLocalizedEndCondition(currentEndCondition)
         binding.textTimeOnTask.text = getString(R.string.task_summary_time_seconds, metrics.timeOnTaskSeconds)
 
-        Log.d("TaskSummary", "Task summary displayed in UI")
+        DebugLogger.d("TaskSummary", "Task summary displayed in UI")
     }
 
     /**
@@ -384,7 +387,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * ENHANCED: Now supports task list navigation
      */
     private fun continueToNextStep(metrics: TaskMetrics) {
-        Log.d("TaskSummary", "Continuing with end condition: $currentEndCondition")
+        DebugLogger.d("TaskSummary", "Continuing with end condition: $currentEndCondition")
 
         // First, save the task data to SessionManager
         saveTaskData(metrics)
@@ -394,7 +397,7 @@ class TaskSummaryActivity : AppCompatActivity() {
         when {
             isSuccess -> {
                 // Success -> Navigate to ASQ
-                Log.d("TaskSummary", "Success condition - navigating to ASQ")
+                DebugLogger.d("TaskSummary", "Success condition - navigating to ASQ")
                 navigateToASQ()
             }
             isInTaskList && !isLastTaskInList && nextTaskId != null -> {
@@ -403,7 +406,7 @@ class TaskSummaryActivity : AppCompatActivity() {
             }
             else -> {
                 // Individual task or last task in list -> Return to task selection
-                Log.d("TaskSummary", "Individual task or last task - returning to task selection")
+                DebugLogger.d("TaskSummary", "Individual task or last task - returning to task selection")
                 navigateToTaskSelection()
             }
         }
@@ -433,7 +436,7 @@ class TaskSummaryActivity : AppCompatActivity() {
                     .show()
 
             } catch (e: Exception) {
-                Log.e("TaskSummary", "Error showing next task dialog", e)
+                DebugLogger.e("TaskSummary", "Error showing next task dialog", e)
                 navigateToTaskSelection()
             }
         }
@@ -446,7 +449,7 @@ class TaskSummaryActivity : AppCompatActivity() {
     private fun navigateToNextTask() {
         val nextTaskIdLocal = nextTaskId
         if (nextTaskIdLocal == null) {
-            Log.e("TaskSummary", "No next task ID available")
+            DebugLogger.e("TaskSummary", "No next task ID available")
             navigateToTaskSelection()
             return
         }
@@ -457,12 +460,12 @@ class TaskSummaryActivity : AppCompatActivity() {
                 val nextTaskConfig = config?.baseConfig?.tasks?.get(nextTaskIdLocal) // <- Now safe
 
                 if (nextTaskConfig == null) {
-                    Log.e("TaskSummary", "Next task config not found for ID: $nextTaskIdLocal")
+                    DebugLogger.e("TaskSummary", "Next task config not found for ID: $nextTaskIdLocal")
                     navigateToTaskSelection()
                     return@launch
                 }
 
-                Log.d("TaskSummary", "Navigating to next task: $nextTaskId - ${nextTaskConfig.label}")
+                DebugLogger.d("TaskSummary", "Navigating to next task: $nextTaskId - ${nextTaskConfig.label}")
 
                 val intent = Intent(this@TaskSummaryActivity, ColorDisplayActivity::class.java).apply {
                     putExtra("TASK_NUMBER", nextTaskIdLocal.toIntOrNull() ?: 0)
@@ -479,7 +482,7 @@ class TaskSummaryActivity : AppCompatActivity() {
                 finish()
 
             } catch (e: Exception) {
-                Log.e("TaskSummary", "Error navigating to next task", e)
+                DebugLogger.e("TaskSummary", "Error navigating to next task", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.task_summary_next_task_failed_format, e.message),
@@ -495,7 +498,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * UPDATED: Now uses taskNumber and iterationCounter
      */
     private fun saveTaskData(metrics: TaskMetrics) {
-        Log.d("TaskSummary", "=== SAVING TASK DATA ===")
+        DebugLogger.d("TaskSummary", "=== SAVING TASK DATA ===")
 
         // Convert metrics back to percentages for SessionManager compatibility
         val totalStroops = metrics.totalStroops
@@ -520,18 +523,18 @@ class TaskSummaryActivity : AppCompatActivity() {
             taskEndTime = taskEndTime
         )
 
-        Log.d("TaskSummary", "TaskCompletionData created:")
-        Log.d("TaskSummary", "  Task Number: ${taskCompletionData.taskNumber}")
-        Log.d("TaskSummary", "  Iteration Counter: ${taskCompletionData.iterationCounter}")
-        Log.d("TaskSummary", "  End condition: ${taskCompletionData.endCondition}")
+        DebugLogger.d("TaskSummary", "TaskCompletionData created:")
+        DebugLogger.d("TaskSummary", "  Task Number: ${taskCompletionData.taskNumber}")
+        DebugLogger.d("TaskSummary", "  Iteration Counter: ${taskCompletionData.iterationCounter}")
+        DebugLogger.d("TaskSummary", "  End condition: ${taskCompletionData.endCondition}")
 
         // Save to SessionManager
         lifecycleScope.launch {
             try {
                 SessionManager.addTaskData(taskCompletionData)
-                Log.d("TaskSummary", getString(R.string.task_summary_data_saved))
+                DebugLogger.d("TaskSummary", getString(R.string.task_summary_data_saved))
             } catch (e: Exception) {
-                Log.e("TaskSummary", getString(R.string.task_summary_data_save_failed), e)
+                DebugLogger.e("TaskSummary", getString(R.string.task_summary_data_save_failed), e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.task_summary_save_error, e.message),
@@ -540,7 +543,7 @@ class TaskSummaryActivity : AppCompatActivity() {
             }
         }
 
-        Log.d("TaskSummary", "=== TASK DATA SAVE COMPLETE ===")
+        DebugLogger.d("TaskSummary", "=== TASK DATA SAVE COMPLETE ===")
     }
 
     /**
@@ -570,7 +573,7 @@ class TaskSummaryActivity : AppCompatActivity() {
                     // Update button text based on new end condition
                     updateContinueButtonText()
 
-                    Log.d("TaskSummary", "End condition revised from '$originalEndCondition' to '$currentEndCondition'")
+                    DebugLogger.d("TaskSummary", "End condition revised from '$originalEndCondition' to '$currentEndCondition'")
 
                     Snackbar.make(
                         binding.root,
@@ -591,7 +594,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * UPDATED: Now passes task list context
      */
     private fun navigateToASQ() {
-        Log.d("TaskSummary", "Navigating to ASQActivity")
+        DebugLogger.d("TaskSummary", "Navigating to ASQActivity")
 
         val intent = Intent(this, ASQActivity::class.java)
 
@@ -618,7 +621,7 @@ class TaskSummaryActivity : AppCompatActivity() {
      * ENHANCED: Context-aware navigation (task list vs global)
      */
     private fun navigateToTaskSelection() {
-        Log.d("TaskSummary", "Navigating back to TaskSelectionActivity")
+        DebugLogger.d("TaskSummary", "Navigating back to TaskSelectionActivity")
 
         val intent = Intent(this, TaskSelectionActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

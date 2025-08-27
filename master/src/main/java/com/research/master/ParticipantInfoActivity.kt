@@ -9,9 +9,9 @@ import com.research.master.databinding.ActivityParticipantInfoBinding
 import com.research.master.utils.SessionManager
 import com.research.master.utils.SessionData
 import com.research.master.utils.FileManager
+import com.research.master.utils.DebugLogger
 import com.research.master.network.NetworkManager
 import kotlinx.coroutines.launch
-import android.util.Log
 
 /**
  * Activity for collecting participant information before starting tasks
@@ -30,6 +30,9 @@ class ParticipantInfoActivity : AppCompatActivity() {
         binding = ActivityParticipantInfoBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
+
         // Initialize FileManager
         fileManager = FileManager(this)
 
@@ -43,7 +46,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
         // Check if this is a new session from intent (synchronous)
         isNewSession = intent.getBooleanExtra("NEW_SESSION", false)
-        Log.d("ParticipantInfo", "Intent NEW_SESSION flag: $isNewSession")
+        DebugLogger.d("ParticipantInfo", "Intent NEW_SESSION flag: $isNewSession")
 
         // Set up UI
         setupClickListeners()
@@ -52,7 +55,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
         if (isNewSession) {
             // For new sessions, clear the form immediately and don't load any data
             clearForm()
-            Log.d("ParticipantInfo", "New session - form cleared, not loading any previous data")
+            DebugLogger.d("ParticipantInfo", "New session - form cleared, not loading any previous data")
         } else {
             // For resume sessions, check existing session data first
             checkForExistingSessionData()
@@ -71,14 +74,14 @@ class ParticipantInfoActivity : AppCompatActivity() {
 
                 if (currentSession != null) {
                     // Resuming session - load participant data
-                    Log.d("ParticipantInfo", "Resuming session - loading participant data")
+                    DebugLogger.d("ParticipantInfo", "Resuming session - loading participant data")
                     loadSessionData(currentSession)
                 } else {
-                    Log.d("ParticipantInfo", "No current session found for resume")
+                    DebugLogger.d("ParticipantInfo", "No current session found for resume")
                 }
 
             } catch (e: Exception) {
-                Log.e("ParticipantInfo", "Error checking for existing session data", e)
+                DebugLogger.e("ParticipantInfo", "Error checking for existing session data", e)
             }
         }
     }
@@ -105,7 +108,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
             "new" -> binding.radioGroupCarModel.check(R.id.radio_car_new)
         }
 
-        Log.d("ParticipantInfo", "Loaded session data for: ${session.participantName}")
+        DebugLogger.d("ParticipantInfo", "Loaded session data for: ${session.participantName}")
     }
 
     private fun setupClickListeners() {
@@ -213,7 +216,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
             try {
                 val sessionId = if (isNewSession) {
                     // Create new session
-                    Log.d("ParticipantInfo", "Creating new session")
+                    DebugLogger.d("ParticipantInfo", "Creating new session")
                     SessionManager.createSession(
                         participantName = validName,
                         participantId = validId,
@@ -224,7 +227,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
                     // Update existing session (if resuming)
                     val currentSession = SessionManager.currentSession.value
                     if (currentSession != null) {
-                        Log.d("ParticipantInfo", "Updating existing session participant data")
+                        DebugLogger.d("ParticipantInfo", "Updating existing session participant data")
                         // TODO: Add updateSessionParticipantInfo method to SessionManager
                         // For now, create new session with existing tasks
                         SessionManager.createSession(
@@ -244,7 +247,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
                     }
                 }
 
-                Log.d("ParticipantInfo", "Session ready: $sessionId")
+                DebugLogger.d("ParticipantInfo", "Session ready: $sessionId")
 
                 // Store session ID in NetworkManager for task control
                 NetworkManager.setCurrentSessionId(sessionId)
@@ -257,7 +260,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
                 startActivity(intent)
 
             } catch (e: Exception) {
-                Log.e("ParticipantInfo", "Failed to create/update session", e)
+                DebugLogger.e("ParticipantInfo", "Failed to create/update session", e)
                 Snackbar.make(
                     binding.root,
                     getString(R.string.participant_info_session_save_error, e.message),
@@ -274,7 +277,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
      */
     private suspend fun savePreviousSessionToFile(previousSession: SessionData) {
         try {
-            Log.d("ParticipantInfo", "TODO: Save previous session to JSON file")
+            DebugLogger.d("ParticipantInfo", "TODO: Save previous session to JSON file")
             // TODO: Implement JSON export logic using FileManager
             // This should:
             // 1. Use FileManager.finalizeSession() to export session data
@@ -283,13 +286,13 @@ class ParticipantInfoActivity : AppCompatActivity() {
             // 4. Handle file conflicts and errors
 
             // Placeholder implementation:
-            Log.d("ParticipantInfo", "Previous session data:")
-            Log.d("ParticipantInfo", "  Participant: ${previousSession.participantName}")
-            Log.d("ParticipantInfo", "  Tasks completed: ${previousSession.tasks.size}")
-            Log.d("ParticipantInfo", "  Status: ${previousSession.sessionStatus}")
+            DebugLogger.d("ParticipantInfo", "Previous session data:")
+            DebugLogger.d("ParticipantInfo", "  Participant: ${previousSession.participantName}")
+            DebugLogger.d("ParticipantInfo", "  Tasks completed: ${previousSession.tasks.size}")
+            DebugLogger.d("ParticipantInfo", "  Status: ${previousSession.sessionStatus}")
 
         } catch (e: Exception) {
-            Log.e("ParticipantInfo", "Failed to save previous session", e)
+            DebugLogger.e("ParticipantInfo", "Failed to save previous session", e)
             // Don't block the new session creation if export fails
         }
     }
@@ -305,7 +308,7 @@ class ParticipantInfoActivity : AppCompatActivity() {
         binding.layoutParticipantId.error = null
         binding.layoutParticipantAge.error = null
 
-        Log.d("ParticipantInfo", "Form cleared completely")
+        DebugLogger.d("ParticipantInfo", "Form cleared completely")
     }
 
     /**
@@ -315,9 +318,9 @@ class ParticipantInfoActivity : AppCompatActivity() {
     private fun saveFormData(name: String, id: String, age: String) {
         try {
             fileManager.saveParticipantFormData(name, id, age)
-            Log.d("ParticipantInfo", "Form data saved via FileManager")
+            DebugLogger.d("ParticipantInfo", "Form data saved via FileManager")
         } catch (e: Exception) {
-            Log.e("ParticipantInfo", "Failed to save form data", e)
+            DebugLogger.e("ParticipantInfo", "Failed to save form data", e)
             // Don't fail the flow if convenience data save fails
         }
     }
@@ -337,13 +340,13 @@ class ParticipantInfoActivity : AppCompatActivity() {
                 binding.etParticipantId.setText(formData.id)
                 binding.etParticipantAge.setText(formData.age)
 
-                Log.d("ParticipantInfo", "Loaded convenience data via FileManager")
+                DebugLogger.d("ParticipantInfo", "Loaded convenience data via FileManager")
             } catch (e: Exception) {
-                Log.e("ParticipantInfo", "Failed to load convenience data", e)
+                DebugLogger.e("ParticipantInfo", "Failed to load convenience data", e)
                 // Continue without loading data if it fails
             }
         } else if (isNewSession) {
-            Log.d("ParticipantInfo", "New session - NOT loading convenience data, form stays clear")
+            DebugLogger.d("ParticipantInfo", "New session - NOT loading convenience data, form stays clear")
         }
     }
 

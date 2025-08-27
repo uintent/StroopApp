@@ -1,8 +1,8 @@
 package com.research.master.network
 
-import android.util.Log
 import com.research.shared.network.*
 import com.research.shared.models.RuntimeConfig
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,11 +36,11 @@ class TaskControlNetworkManager(
         runtimeConfig: RuntimeConfig? = null
     ): Boolean {
         return try {
-            Log.d("TaskControl", "Starting task: $taskId with timeout: ${taskTimeoutMs}ms")
+            DebugLogger.d("TaskControl", "Starting task: $taskId with timeout: ${taskTimeoutMs}ms")
 
             // Create timing parameters from config or defaults
             val timing = runtimeConfig?.getEffectiveTiming() ?: run {
-                Log.w("TaskControl", "No runtime config provided, using defaults")
+                DebugLogger.w("TaskControl", "No runtime config provided, using defaults")
                 com.research.shared.models.TimingConfig(
                     stroopDisplayDuration = 2000,
                     minInterval = 1000,
@@ -68,11 +68,11 @@ class TaskControlNetworkManager(
             networkClient.sendMessage(startMessage)
             _currentTaskState.value = TaskState.Starting(taskId, taskLabel)
 
-            Log.d("TaskControl", "START_TASK message sent successfully")
+            DebugLogger.d("TaskControl", "START_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
-            Log.e("TaskControl", "Error starting task", e)
+            DebugLogger.e("TaskControl", "Error starting task", e)
             _lastTaskError.value = "Error starting task: ${e.message}"
             _currentTaskState.value = TaskState.Error("START_FAILED", e.message ?: "Unknown error")
             false
@@ -90,7 +90,7 @@ class TaskControlNetworkManager(
         sessionId: String
     ): Boolean {
         return try {
-            Log.d("TaskControl", "Ending task: $taskId with condition: $endCondition")
+            DebugLogger.d("TaskControl", "Ending task: $taskId with condition: $endCondition")
 
             // Map end condition to EndReason
             val endReason = when (endCondition.lowercase()) {
@@ -111,11 +111,11 @@ class TaskControlNetworkManager(
             networkClient.sendMessage(endMessage)
             _currentTaskState.value = TaskState.Completed(taskId, endCondition, System.currentTimeMillis())
 
-            Log.d("TaskControl", "END_TASK message sent successfully")
+            DebugLogger.d("TaskControl", "END_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
-            Log.e("TaskControl", "Error ending task", e)
+            DebugLogger.e("TaskControl", "Error ending task", e)
             _lastTaskError.value = "Error ending task: ${e.message}"
             false
         }
@@ -127,17 +127,17 @@ class TaskControlNetworkManager(
      */
     suspend fun resetTask(taskId: String, sessionId: String): Boolean {
         return try {
-            Log.d("TaskControl", "Resetting task: $taskId")
+            DebugLogger.d("TaskControl", "Resetting task: $taskId")
 
             val resetMessage = TaskResetCommand(sessionId = sessionId)
             networkClient.sendMessage(resetMessage)
             _currentTaskState.value = TaskState.Ready
 
-            Log.d("TaskControl", "RESET_TASK message sent successfully")
+            DebugLogger.d("TaskControl", "RESET_TASK message sent successfully")
             true
 
         } catch (e: Exception) {
-            Log.e("TaskControl", "Error resetting task", e)
+            DebugLogger.e("TaskControl", "Error resetting task", e)
             _lastTaskError.value = "Error resetting task: ${e.message}"
             false
         }
@@ -148,7 +148,7 @@ class TaskControlNetworkManager(
      * TODO: Implement when PauseTaskMessage is added to shared module
      */
     suspend fun pauseTask(taskId: String, sessionId: String): Boolean {
-        Log.w("TaskControl", "Pause task not yet implemented - PauseTaskMessage needed in shared module")
+        DebugLogger.w("TaskControl", "Pause task not yet implemented - PauseTaskMessage needed in shared module")
         return false
     }
 
@@ -157,7 +157,7 @@ class TaskControlNetworkManager(
      * TODO: Implement when ResumeTaskMessage is added to shared module
      */
     suspend fun resumeTask(taskId: String, sessionId: String): Boolean {
-        Log.w("TaskControl", "Resume task not yet implemented - ResumeTaskMessage needed in shared module")
+        DebugLogger.w("TaskControl", "Resume task not yet implemented - ResumeTaskMessage needed in shared module")
         return false
     }
 
@@ -167,7 +167,7 @@ class TaskControlNetworkManager(
      * TODO: Implement when VoiceCalibrationMessage is added to shared module
      */
     suspend fun startVoiceCalibration(sessionId: String): Boolean {
-        Log.w("TaskControl", "Voice calibration not yet implemented - VoiceCalibrationMessage needed")
+        DebugLogger.w("TaskControl", "Voice calibration not yet implemented - VoiceCalibrationMessage needed")
         return false
     }
 
@@ -176,7 +176,7 @@ class TaskControlNetworkManager(
      * SOLUTION 1 FIX: Removed TaskTimeoutMessage handling - ColorDisplayActivity handles it directly
      */
     fun handleTaskMessage(message: NetworkMessage) {
-        Log.d("TaskControl", "TaskControlManager handling message: ${message.messageType}")
+        DebugLogger.d("TaskControl", "TaskControlManager handling message: ${message.messageType}")
 
         when (message) {
             is TaskStatusMessage -> {
@@ -206,7 +206,7 @@ class TaskControlNetworkManager(
             }
 
             else -> {
-                Log.d("TaskControl", "TaskControlManager - Unhandled message type: ${message.messageType}")
+                DebugLogger.d("TaskControl", "TaskControlManager - Unhandled message type: ${message.messageType}")
             }
         }
     }
@@ -215,7 +215,7 @@ class TaskControlNetworkManager(
      * Handle task status updates from Projector
      */
     private fun handleTaskStatusMessage(message: TaskStatusMessage) {
-        Log.d("TaskControl", "Task ${message.taskId} status: ${message.status}")
+        DebugLogger.d("TaskControl", "Task ${message.taskId} status: ${message.status}")
 
         val newState = when (message.status) {
             TaskStatus.WAITING -> TaskState.Ready
@@ -234,7 +234,7 @@ class TaskControlNetworkManager(
      * The timeout is now handled directly by ColorDisplayActivity for better UI control
      */
     // private fun handleTaskTimeoutMessage(message: TaskTimeoutMessage) {
-    //     Log.d("TaskControl", "Task ${message.taskId} timed out after ${message.actualDuration}ms, ${message.stroopsDisplayed} stroops shown")
+    //     DebugLogger.d("TaskControl", "Task ${message.taskId} timed out after ${message.actualDuration}ms, ${message.stroopsDisplayed} stroops shown")
     //     _currentTaskState.value = TaskState.Completed(message.taskId, "Timed Out", System.currentTimeMillis())
     // }
 
@@ -242,7 +242,7 @@ class TaskControlNetworkManager(
      * Handle Stroop results from Projector
      */
     private fun handleStroopResultsMessage(message: StroopResultsMessage) {
-        Log.d("TaskControl", "Received Stroop results for task ${message.taskId}: ${message.totalStroops} stroops, ${message.correctResponses} correct")
+        DebugLogger.d("TaskControl", "Received Stroop results for task ${message.taskId}: ${message.totalStroops} stroops, ${message.correctResponses} correct")
 
         // TODO: Forward to SessionManager for data persistence
         // This will be implemented when SessionManager integration is complete
@@ -252,7 +252,7 @@ class TaskControlNetworkManager(
      * Handle error messages from Projector
      */
     private fun handleErrorMessage(message: ErrorMessage) {
-        Log.e("TaskControl", "Projector error: ${message.errorCode} - ${message.errorDescription}")
+        DebugLogger.e("TaskControl", "Projector error: ${message.errorCode} - ${message.errorDescription}")
         _lastTaskError.value = "Projector error: ${message.errorDescription}"
 
         if (message.isFatal) {
@@ -265,7 +265,7 @@ class TaskControlNetworkManager(
      * This allows the activity to handle UI updates while keeping state management here
      */
     fun notifyTaskTimeout(taskId: String, duration: Long, stroopsDisplayed: Int) {
-        Log.d("TaskControl", "Notified of task timeout: $taskId after ${duration}ms, $stroopsDisplayed stroops")
+        DebugLogger.d("TaskControl", "Notified of task timeout: $taskId after ${duration}ms, $stroopsDisplayed stroops")
         _currentTaskState.value = TaskState.Completed(taskId, "Timed Out", System.currentTimeMillis())
     }
 

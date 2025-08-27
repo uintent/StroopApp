@@ -15,6 +15,7 @@ import com.research.master.utils.SessionManager
 import com.research.master.utils.TaskCompletionData
 import com.research.master.utils.FileManager
 import com.research.master.utils.ConfigLoadResult
+import com.research.master.utils.DebugLogger
 import com.research.shared.network.StroopDisplayMessage
 import com.research.shared.network.StroopHiddenMessage
 import com.research.shared.network.HeartbeatMessage
@@ -28,7 +29,6 @@ import com.research.shared.network.TaskResetCommand
 import com.research.shared.network.MessageType
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import android.util.Log
 import com.google.android.material.snackbar.Snackbar
 import androidx.core.content.ContextCompat
 
@@ -87,6 +87,9 @@ class ColorDisplayActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize DebugLogger
+        DebugLogger.initialize(this)
+
         // Record when activity opened
         activityOpenTime = System.currentTimeMillis()
 
@@ -133,8 +136,8 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Set initial state
         showTaskReady()
 
-        Log.d("TaskControl", "Activity opened at: $activityOpenTime, countdown duration: ${countdownDuration}ms")
-        Log.d("TaskControl", "Task: $taskNumber (iteration $iterationCounter)")
+        DebugLogger.d("TaskControl", "Activity opened at: $activityOpenTime, countdown duration: ${countdownDuration}ms")
+        DebugLogger.d("TaskControl", "Task: $taskNumber (iteration $iterationCounter)")
     }
 
     /**
@@ -148,14 +151,14 @@ class ColorDisplayActivity : AppCompatActivity() {
                         // Get countdown duration from config (in seconds) and convert to milliseconds
                         val configCountdown = result.config.countdownDuration * 1000L
                         countdownDuration = configCountdown
-                        Log.d("TaskControl", "Countdown duration loaded from config: ${countdownDuration}ms (${result.config.countdownDuration}s)")
+                        DebugLogger.d("TaskControl", "Countdown duration loaded from config: ${countdownDuration}ms (${result.config.countdownDuration}s)")
                     }
                     is ConfigLoadResult.Error -> {
-                        Log.w("TaskControl", "Config loading failed: ${fileManager.getErrorMessage(result.error)}, using default countdown duration: ${countdownDuration}ms")
+                        DebugLogger.w("TaskControl", "Config loading failed: ${fileManager.getErrorMessage(result.error)}, using default countdown duration: ${countdownDuration}ms")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("TaskControl", "Error loading countdown duration from config, using default: ${countdownDuration}ms", e)
+                DebugLogger.e("TaskControl", "Error loading countdown duration from config, using default: ${countdownDuration}ms", e)
             }
         }
     }
@@ -173,9 +176,9 @@ class ColorDisplayActivity : AppCompatActivity() {
             if (taskIdString != null) {
                 try {
                     taskNumber = taskIdString.toInt()
-                    Log.d("TaskControl", "Converted TASK_ID '$taskIdString' to taskNumber $taskNumber")
+                    DebugLogger.d("TaskControl", "Converted TASK_ID '$taskIdString' to taskNumber $taskNumber")
                 } catch (e: NumberFormatException) {
-                    Log.e("TaskControl", "Invalid TASK_ID format: $taskIdString, expected integer")
+                    DebugLogger.e("TaskControl", "Invalid TASK_ID format: $taskIdString, expected integer")
                     // Set a default or show error
                     taskNumber = 1
                 }
@@ -189,7 +192,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         taskTimeout = intent.getIntExtra("TASK_TIMEOUT", 0)
         isIndividualTask = intent.getBooleanExtra("IS_INDIVIDUAL_TASK", true)
 
-        Log.d("TaskControl", "Task info: Number=$taskNumber, ID=$taskId, Label=$taskLabel, Timeout=${taskTimeout}s")
+        DebugLogger.d("TaskControl", "Task info: Number=$taskNumber, ID=$taskId, Label=$taskLabel, Timeout=${taskTimeout}s")
     }
 
     /**
@@ -199,9 +202,9 @@ class ColorDisplayActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 iterationCounter = SessionManager.getNextIterationCounter(taskNumber)
-                Log.d("TaskControl", "Got iteration counter for task $taskNumber: $iterationCounter")
+                DebugLogger.d("TaskControl", "Got iteration counter for task $taskNumber: $iterationCounter")
             } catch (e: Exception) {
-                Log.e("TaskControl", "Error getting iteration counter, using 0", e)
+                DebugLogger.e("TaskControl", "Error getting iteration counter, using 0", e)
                 iterationCounter = 0
             }
         }
@@ -269,12 +272,12 @@ class ColorDisplayActivity : AppCompatActivity() {
                 // Task has started (countdown finished)
                 if (taskActualStartTime == 0L) {
                     taskActualStartTime = System.currentTimeMillis()
-                    Log.d("TaskControl", "Task actually started at: $taskActualStartTime (${taskActualStartTime - activityOpenTime}ms after activity opened)")
+                    DebugLogger.d("TaskControl", "Task actually started at: $taskActualStartTime (${taskActualStartTime - activityOpenTime}ms after activity opened)")
                 }
             }
             is TaskState.Completed -> {
                 // Task completed - will be handled in completeTask method
-                Log.d("TaskControl", "Task state shows completed: ${taskState.endCondition}")
+                DebugLogger.d("TaskControl", "Task state shows completed: ${taskState.endCondition}")
             }
             else -> {
                 // Other states don't need special data collection handling
@@ -349,7 +352,7 @@ class ColorDisplayActivity : AppCompatActivity() {
                 binding.btnTaskSuccess.isEnabled = false
                 binding.btnTaskFailed.isEnabled = false
                 binding.btnTaskGivenUp.isEnabled = false
-                binding.btnReturnToTasks.visibility = View.VISIBLE
+                binding.btnReturnToTasks.visibility = View.GONE
 
                 binding.textStroopStatus.text = getString(R.string.color_display_task_completed, taskState.endCondition)
 
@@ -380,12 +383,12 @@ class ColorDisplayActivity : AppCompatActivity() {
      * Enhanced message observation with data collection
      */
     private fun observeNetworkMessages() {
-        Log.d("TaskControl", "Setting up message listener with data collection")
+        DebugLogger.d("TaskControl", "Setting up message listener with data collection")
 
         lifecycleScope.launch {
             try {
                 networkClient.receiveMessages().collectLatest { message ->
-                    Log.d("TaskControl", "Message received: ${message::class.java.simpleName}")
+                    DebugLogger.d("TaskControl", "Message received: ${message::class.java.simpleName}")
 
                     // Only process messages if activity is resumed
                     if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
@@ -414,22 +417,22 @@ class ColorDisplayActivity : AppCompatActivity() {
 
                             // Connection management messages
                             is HeartbeatMessage -> {
-                                Log.v("TaskControl", "Heartbeat received")
+                                DebugLogger.d("TaskControl", "Heartbeat received")
                             }
 
                             is HandshakeResponseMessage -> {
-                                Log.d("TaskControl", "Handshake response received")
+                                DebugLogger.d("TaskControl", "Handshake response received")
                             }
 
                             else -> {
-                                Log.w("TaskControl", "Unmatched message: ${message::class.java.name}")
+                                DebugLogger.w("TaskControl", "Unmatched message: ${message::class.java.name}")
                                 taskControlManager.handleTaskMessage(message)
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("TaskControl", "Critical error in message listener", e)
+                DebugLogger.e("TaskControl", "Critical error in message listener", e)
             }
         }
     }
@@ -439,10 +442,10 @@ class ColorDisplayActivity : AppCompatActivity() {
      * SPECIAL CASE: If stroop is active, allow 1 second grace period for response
      */
     private fun handleTaskTimeout(message: TaskTimeoutMessage) {
-        Log.d("TaskControl", "Task timed out: ${message.taskId}, duration: ${message.actualDuration}ms")
+        DebugLogger.d("TaskControl", "Task timed out: ${message.taskId}, duration: ${message.actualDuration}ms")
 
         if (isTaskTimedOut) {
-            Log.w("TaskControl", "Task already timed out, ignoring duplicate")
+            DebugLogger.w("TaskControl", "Task already timed out, ignoring duplicate")
             return
         }
 
@@ -451,7 +454,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         val isStroopActiveAtTimeout = isStroopActive && currentStroopWord != null
 
         if (isStroopActiveAtTimeout) {
-            Log.d("TaskControl", "TIMEOUT WITH ACTIVE STROOP: Allowing 1 second grace period for response")
+            DebugLogger.d("TaskControl", "TIMEOUT WITH ACTIVE STROOP: Allowing 1 second grace period for response")
 
             // Disable all control buttons but KEEP response buttons active
             disableControlButtonsOnly()
@@ -459,7 +462,7 @@ class ColorDisplayActivity : AppCompatActivity() {
 
             // Schedule navigation after 1 second grace period
             binding.root.postDelayed({
-                Log.d("TaskControl", "Grace period ended - checking if response was recorded")
+                DebugLogger.d("TaskControl", "Grace period ended - checking if response was recorded")
 
                 // Check if response was recorded during grace period
                 val responseRecordedInGrace = stroopResponses.any {
@@ -467,16 +470,16 @@ class ColorDisplayActivity : AppCompatActivity() {
                 }
 
                 if (!responseRecordedInGrace) {
-                    Log.d("TaskControl", "No response during grace period - marking stroop as missed")
+                    DebugLogger.d("TaskControl", "No response during grace period - marking stroop as missed")
                     recordMissedStroop()
                 }
 
-                Log.d("TaskControl", "Navigating to TaskSummary after grace period")
+                DebugLogger.d("TaskControl", "Navigating to TaskSummary after grace period")
                 navigateToTaskSummary("Timed Out")
             }, 1000) // 1 second grace period
 
         } else {
-            Log.d("TaskControl", "TIMEOUT WITHOUT ACTIVE STROOP: Navigating immediately")
+            DebugLogger.d("TaskControl", "TIMEOUT WITHOUT ACTIVE STROOP: Navigating immediately")
             // No active stroop - navigate immediately
             navigateToTaskSummary("Timed Out")
         }
@@ -489,7 +492,7 @@ class ColorDisplayActivity : AppCompatActivity() {
                 message.stroopsDisplayed
             )
         } catch (e: Exception) {
-            Log.e("TaskControl", "Error notifying TaskControlManager of timeout", e)
+            DebugLogger.e("TaskControl", "Error notifying TaskControlManager of timeout", e)
             // Don't block navigation on network error
         }
     }
@@ -499,11 +502,11 @@ class ColorDisplayActivity : AppCompatActivity() {
      */
     private fun handleStroopStarted(message: StroopStartedMessage) {
         if (isTaskTimedOut) {
-            Log.d("TaskControl", "Ignoring StroopStarted - task has timed out")
+            DebugLogger.d("TaskControl", "Ignoring StroopStarted - task has timed out")
             return
         }
 
-        Log.d("TaskControl", "Stroop started: #${message.stroopIndex}, word='${message.word}', answer='${message.correctAnswer}'")
+        DebugLogger.d("TaskControl", "Stroop started: #${message.stroopIndex}, word='${message.word}', answer='${message.correctAnswer}'")
 
         // Record stroop start for timing
         currentStroopStartTime = System.currentTimeMillis()
@@ -516,7 +519,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         binding.textStroopStatus.text = getString(R.string.color_display_stroop_active, message.stroopIndex)
         setResponseButtonsState(true)
 
-        Log.d("TaskControl", "Stroop #${message.stroopIndex} started at: $currentStroopStartTime")
+        DebugLogger.d("TaskControl", "Stroop #${message.stroopIndex} started at: $currentStroopStartTime")
     }
 
     /**
@@ -524,11 +527,11 @@ class ColorDisplayActivity : AppCompatActivity() {
      */
     private fun handleStroopEnded(message: StroopEndedMessage) {
         if (isTaskTimedOut) {
-            Log.d("TaskControl", "Ignoring StroopEnded - task has timed out")
+            DebugLogger.d("TaskControl", "Ignoring StroopEnded - task has timed out")
             return
         }
 
-        Log.d("TaskControl", "Stroop ended: #${message.stroopIndex}, reason=${message.endReason}")
+        DebugLogger.d("TaskControl", "Stroop ended: #${message.stroopIndex}, reason=${message.endReason}")
 
         // Check if this stroop was missed (no response recorded)
         val wasResponseRecorded = stroopResponses.any { it.stroopIndex == message.stroopIndex }
@@ -540,7 +543,7 @@ class ColorDisplayActivity : AppCompatActivity() {
                 val responseRecordedInGrace = stroopResponses.any { it.stroopIndex == message.stroopIndex }
                 if (!responseRecordedInGrace) {
                     recordMissedStroop()
-                    Log.d("TaskControl", "Stroop #${message.stroopIndex} marked as missed after grace period")
+                    DebugLogger.d("TaskControl", "Stroop #${message.stroopIndex} marked as missed after grace period")
                 }
             }, 1000)
         }
@@ -577,7 +580,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         )
 
         stroopResponses.add(response)
-        Log.d("TaskControl", "Recorded missed stroop: #${currentStroopIndex}")
+        DebugLogger.d("TaskControl", "Recorded missed stroop: #${currentStroopIndex}")
     }
 
     /**
@@ -586,7 +589,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun handleStroopDisplay(message: StroopDisplayMessage) {
         if (isTaskTimedOut) return
 
-        Log.d("TaskControl", "Legacy Stroop displayed: ${message.correctAnswer}")
+        DebugLogger.d("TaskControl", "Legacy Stroop displayed: ${message.correctAnswer}")
 
         currentStroopStartTime = System.currentTimeMillis()
         currentStroopIndex += 1 // Increment for legacy messages
@@ -601,7 +604,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun handleStroopHidden() {
         if (isTaskTimedOut) return
 
-        Log.d("TaskControl", "Stroop hidden")
+        DebugLogger.d("TaskControl", "Stroop hidden")
         isStroopActive = false
 
         if (responseButtonsActive) {
@@ -626,7 +629,7 @@ class ColorDisplayActivity : AppCompatActivity() {
             binding.textCurrentColor.setTextSize(TypedValue.COMPLEX_UNIT_SP, optimalSize)
         }
 
-        Log.d("TaskControl", "Displaying word '$word'")
+        DebugLogger.d("TaskControl", "Displaying word '$word'")
     }
 
     private fun calculateOptimalFontSize(text: String, availableWidth: Int, availableHeight: Int): Float {
@@ -691,7 +694,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun recordParticipantResponse(isCorrect: Boolean) {
         // Allow responses during timeout grace period for active stroop
         if (isTaskTimedOut && !isStroopActive) {
-            Log.d("TaskControl", "Ignoring response - task timed out and no active stroop")
+            DebugLogger.d("TaskControl", "Ignoring response - task timed out and no active stroop")
             return
         }
 
@@ -699,11 +702,11 @@ class ColorDisplayActivity : AppCompatActivity() {
         val reactionTimeMs = responseTime - currentStroopStartTime
         val responseType = if (isCorrect) "CORRECT" else "INCORRECT"
 
-        Log.d("TaskControl", "Recording response: $responseType for stroop #$currentStroopIndex")
-        Log.d("TaskControl", "Reaction time: ${reactionTimeMs}ms")
+        DebugLogger.d("TaskControl", "Recording response: $responseType for stroop #$currentStroopIndex")
+        DebugLogger.d("TaskControl", "Reaction time: ${reactionTimeMs}ms")
 
         if (isTaskTimedOut) {
-            Log.d("TaskControl", "Response recorded DURING TIMEOUT GRACE PERIOD")
+            DebugLogger.d("TaskControl", "Response recorded DURING TIMEOUT GRACE PERIOD")
         }
 
         // Create and store response data
@@ -744,7 +747,7 @@ class ColorDisplayActivity : AppCompatActivity() {
             binding.textStroopStatus.text = getString(R.string.color_display_response_recorded_waiting)
         }
 
-        Log.d("TaskControl", "Response recorded. Total responses: ${stroopResponses.size}")
+        DebugLogger.d("TaskControl", "Response recorded. Total responses: ${stroopResponses.size}")
     }
 
     /**
@@ -752,9 +755,9 @@ class ColorDisplayActivity : AppCompatActivity() {
      * UPDATED: Now passes taskNumber and iterationCounter
      */
     private fun navigateToTaskSummary(endCondition: String) {
-        Log.d("TaskControl", getString(R.string.color_display_log_preparing_summary))
-        Log.d("TaskControl", getString(R.string.color_display_log_total_responses, stroopResponses.size))
-        Log.d("TaskControl", "End condition: $endCondition")
+        DebugLogger.d("TaskControl", getString(R.string.color_display_log_preparing_summary))
+        DebugLogger.d("TaskControl", getString(R.string.color_display_log_total_responses, stroopResponses.size))
+        DebugLogger.d("TaskControl", "End condition: $endCondition")
 
         // Calculate time on task (exclude countdown)
         val taskEndTime = System.currentTimeMillis()
@@ -765,7 +768,7 @@ class ColorDisplayActivity : AppCompatActivity() {
             taskEndTime - activityOpenTime - countdownDuration
         }
 
-        Log.d("TaskControl", getString(R.string.color_display_log_time_on_task, timeOnTaskMs))
+        DebugLogger.d("TaskControl", getString(R.string.color_display_log_time_on_task, timeOnTaskMs))
 
         // Create intent for TaskSummaryActivity with raw data
         val intent = Intent(this, TaskSummaryActivity::class.java).apply {
@@ -803,7 +806,7 @@ class ColorDisplayActivity : AppCompatActivity() {
             putExtra("IS_INDIVIDUAL_TASK", isIndividualTask)
         }
 
-        Log.d("TaskControl", "Starting TaskSummaryActivity with ${stroopResponses.size} stroop responses")
+        DebugLogger.d("TaskControl", "Starting TaskSummaryActivity with ${stroopResponses.size} stroop responses")
         startActivity(intent)
 
         // Finish this activity since user shouldn't return here
@@ -841,7 +844,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Reset data collection
         resetDataCollection()
 
-        Log.d("TaskControl", "Task ready state set - START button enabled")
+        DebugLogger.d("TaskControl", "Task ready state set - START button enabled")
     }
 
     /**
@@ -852,7 +855,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         taskActualStartTime = 0L
         currentStroopStartTime = 0L
         currentStroopIndex = 0
-        Log.d("TaskControl", "Data collection reset")
+        DebugLogger.d("TaskControl", "Data collection reset")
     }
 
     private fun showWaitingForStroop() {
@@ -901,7 +904,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     }
 
     private fun returnToTaskSelection() {
-        Log.d("TaskControl", "Returning to task selection")
+        DebugLogger.d("TaskControl", "Returning to task selection")
         finish()
     }
 
@@ -917,7 +920,7 @@ class ColorDisplayActivity : AppCompatActivity() {
             try {
                 // Update iteration counter before starting task
                 iterationCounter = SessionManager.getNextIterationCounter(taskNumber)
-                Log.d("TaskControl", "Starting task: $taskNumber (iteration $iterationCounter)")
+                DebugLogger.d("TaskControl", "Starting task: $taskNumber (iteration $iterationCounter)")
 
                 // Reset data collection for new task iteration
                 resetDataCollection()
@@ -939,10 +942,10 @@ class ColorDisplayActivity : AppCompatActivity() {
                         Snackbar.LENGTH_LONG
                     ).show()
                 } else {
-                    Log.d("TaskControl", "Task started successfully with iteration counter: $iterationCounter")
+                    DebugLogger.d("TaskControl", "Task started successfully with iteration counter: $iterationCounter")
                 }
             } catch (e: Exception) {
-                Log.e("TaskControl", "Error getting iteration counter or starting task", e)
+                DebugLogger.e("TaskControl", "Error getting iteration counter or starting task", e)
                 isTaskRunning = false
                 Snackbar.make(
                     binding.root,
@@ -956,7 +959,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun pauseTask() {
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Sending pause command to projector")
+        DebugLogger.d("TaskControl", "Sending pause command to projector")
 
         lifecycleScope.launch {
             try {
@@ -967,10 +970,10 @@ class ColorDisplayActivity : AppCompatActivity() {
                 )
 
                 networkClient.sendMessage(pauseMessage)
-                Log.d("TaskControl", "Pause message sent to projector")
+                DebugLogger.d("TaskControl", "Pause message sent to projector")
 
             } catch (e: Exception) {
-                Log.e("TaskControl", "Failed to send pause command", e)
+                DebugLogger.e("TaskControl", "Failed to send pause command", e)
                 Snackbar.make(binding.root, getString(R.string.color_display_failed_pause), Snackbar.LENGTH_LONG).show()
             }
         }
@@ -979,7 +982,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun resumeTask() {
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Sending resume command to projector")
+        DebugLogger.d("TaskControl", "Sending resume command to projector")
 
         lifecycleScope.launch {
             try {
@@ -990,10 +993,10 @@ class ColorDisplayActivity : AppCompatActivity() {
                 )
 
                 networkClient.sendMessage(resumeMessage)
-                Log.d("TaskControl", "Resume message sent to projector")
+                DebugLogger.d("TaskControl", "Resume message sent to projector")
 
             } catch (e: Exception) {
-                Log.e("TaskControl", "Failed to send resume command", e)
+                DebugLogger.e("TaskControl", "Failed to send resume command", e)
                 Snackbar.make(binding.root, getString(R.string.color_display_failed_resume), Snackbar.LENGTH_LONG).show()
             }
         }
@@ -1002,7 +1005,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun resetTask() {
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Sending reset command to projector")
+        DebugLogger.d("TaskControl", "Sending reset command to projector")
 
         lifecycleScope.launch {
             try {
@@ -1012,14 +1015,14 @@ class ColorDisplayActivity : AppCompatActivity() {
                 )
 
                 networkClient.sendMessage(resetMessage)
-                Log.d("TaskControl", "Reset message sent to projector")
+                DebugLogger.d("TaskControl", "Reset message sent to projector")
 
                 // Reset local UI state immediately to Ready state
                 resetToReadyState()
-                Log.d("TaskControl", "Local UI reset to ready state with START button enabled")
+                DebugLogger.d("TaskControl", "Local UI reset to ready state with START button enabled")
 
             } catch (e: Exception) {
-                Log.e("TaskControl", "Failed to send reset command", e)
+                DebugLogger.e("TaskControl", "Failed to send reset command", e)
                 Snackbar.make(binding.root, getString(R.string.color_display_failed_reset), Snackbar.LENGTH_LONG).show()
             }
         }
@@ -1063,7 +1066,7 @@ class ColorDisplayActivity : AppCompatActivity() {
         // Disable response buttons
         setResponseButtonsState(false)
 
-        Log.d("TaskControl", "UI reset complete - START button enabled for iteration $iterationCounter")
+        DebugLogger.d("TaskControl", "UI reset complete - START button enabled for iteration $iterationCounter")
     }
 
     /**
@@ -1072,7 +1075,7 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun completeTask(condition: String) {
         val sessionIdValue = currentSessionId ?: return
 
-        Log.d("TaskControl", "Completing task: $taskNumber with condition: $condition")
+        DebugLogger.d("TaskControl", "Completing task: $taskNumber with condition: $condition")
 
         // Show completion UI immediately
         showTaskCompletion(condition)
@@ -1085,14 +1088,14 @@ class ColorDisplayActivity : AppCompatActivity() {
             val success = taskControlManager.endTask(taskNumber.toString(), condition, sessionIdValue)
 
             if (!success) {
-                Log.w("TaskControl", "Failed to end task via TaskControlManager (network)")
+                DebugLogger.w("TaskControl", "Failed to end task via TaskControlManager (network)")
                 // Don't show error to user since we've already navigated away
             }
         }
     }
 
     private fun showTaskCompletion(condition: String) {
-        Log.d("TaskControl", "Task completing with condition: $condition - navigating to summary")
+        DebugLogger.d("TaskControl", "Task completing with condition: $condition - navigating to summary")
 
         // Show a brief completion message
         binding.textStroopStatus.text = getString(R.string.color_display_task_ending, condition)

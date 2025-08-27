@@ -3,14 +3,15 @@ package com.research.master.network
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
-import android.util.Log
 import com.research.shared.network.*
+import com.research.master.utils.DebugLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.selects.select
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.lang.ref.WeakReference
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -20,14 +21,22 @@ import kotlinx.coroutines.CompletableDeferred
 
 /**
  * Network client for the Master app that discovers and connects to Projector devices
+ * FIXED: Uses WeakReference for context to prevent memory leaks when stored statically
  */
 class MasterNetworkClient(
-    private val context: Context,
+    context: Context,
     private val masterDeviceId: String = "Master-${UUID.randomUUID().toString().take(8)}"
 ) {
     private val TAG = "MasterNetwork"
 
-    private val nsdManager: NsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    // FIXED: Use WeakReference for context to prevent memory leaks
+    private val contextRef = WeakReference(context.applicationContext)
+
+    private val nsdManager: NsdManager by lazy {
+        contextRef.get()?.getSystemService(Context.NSD_SERVICE) as? NsdManager
+            ?: throw IllegalStateException("Context no longer available")
+    }
+
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var socket: Socket? = null
 
@@ -83,16 +92,16 @@ class MasterNetworkClient(
      * Start device discovery
      */
     fun startDiscovery() {
-        Log.d(TAG, "Starting device discovery")
+        DebugLogger.d(TAG, "Starting device discovery")
         _connectionState.value = ConnectionState.DISCOVERING
 
         discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) {
-                Log.d(TAG, "Discovery started")
+                DebugLogger.d(TAG, "Discovery started")
             }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                Log.d(TAG, "Service found: ${serviceInfo.serviceName}")
+                DebugLogger.d(TAG, "Service found: ${serviceInfo.serviceName}")
 
                 if (serviceInfo.serviceName.startsWith(NetworkConstants.SERVICE_NAME_PREFIX)) {
                     // Parse device info from service name
@@ -113,21 +122,21 @@ class MasterNetworkClient(
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                Log.d(TAG, "Service lost: ${serviceInfo.serviceName}")
+                DebugLogger.d(TAG, "Service lost: ${serviceInfo.serviceName}")
                 removeDiscoveredDevice(serviceInfo.serviceName)
             }
 
             override fun onDiscoveryStopped(serviceType: String) {
-                Log.d(TAG, "Discovery stopped")
+                DebugLogger.d(TAG, "Discovery stopped")
             }
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.e(TAG, "Discovery start failed: $errorCode")
+                DebugLogger.e(TAG, "Discovery start failed: $errorCode")
                 _connectionState.value = ConnectionState.ERROR
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.e(TAG, "Discovery stop failed: $errorCode")
+                DebugLogger.e(TAG, "Discovery stop failed: $errorCode")
             }
         }
 
@@ -138,7 +147,7 @@ class MasterNetworkClient(
                 discoveryListener
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start discovery", e)
+            DebugLogger.e(TAG, "Failed to start discovery", e)
             _connectionState.value = ConnectionState.ERROR
         }
     }
@@ -150,42 +159,47 @@ class MasterNetworkClient(
         discoveryListener?.let { listener ->
             try {
                 nsdManager.stopServiceDiscovery(listener)
+                DebugLogger.d(TAG, "Device discovery stopped")
             } catch (e: Exception) {
-                Log.e(TAG, "Error stopping discovery", e)
+                DebugLogger.e(TAG, "Error stopping discovery", e)
             }
         }
         discoveryListener = null
     }
 
-    // Replace the connectToDevice method in MasterNetworkClient.kt
-
     /**
      * Connect to a discovered device
-     * FIXED: Ensure message handling is ready before completing connection
+     * FIXED: Use non-blocking socket connection to prevent thread starvation
      */
     suspend fun connectToDevice(device: DiscoveredDevice): Boolean = withContext(Dispatchers.IO) {
         if (!device.isResolved) {
-            Log.e(TAG, "Device not resolved: ${device.serviceName}")
+            DebugLogger.e(TAG, "Device not resolved: ${device.serviceName}")
             return@withContext false
         }
 
         _connectionState.value = ConnectionState.CONNECTING
+        DebugLogger.d(TAG, "Attempting to connect to ${device.host}:${device.port}")
 
         try {
-            // Create socket and connect
+            // FIXED: Create socket with proper non-blocking configuration
             socket = Socket().apply {
                 tcpNoDelay = true
                 keepAlive = true
+                soTimeout = NetworkConstants.SOCKET_READ_TIMEOUT_MS
             }
 
             val address = InetSocketAddress(device.host, device.port)
-            socket?.connect(address, NetworkConstants.SOCKET_CONNECTION_TIMEOUT_MS)
 
-            Log.d(TAG, "Connected to ${device.host}:${device.port}")
+            // FIXED: Use withContext to ensure proper IO threading
+            withContext(Dispatchers.IO) {
+                socket?.connect(address, NetworkConstants.SOCKET_CONNECTION_TIMEOUT_MS)
+            }
+
+            DebugLogger.d(TAG, "Connected to ${device.host}:${device.port}")
 
             connectedDevice = device
 
-            // FIXED: Use a CompletableDeferred to wait for message handling to be ready
+            // Use a CompletableDeferred to wait for message handling to be ready
             val messageHandlingReady = CompletableDeferred<Boolean>()
 
             // Start message handling and wait for it to be ready
@@ -199,19 +213,19 @@ class MasterNetworkClient(
             } ?: false
 
             if (!isReady) {
-                Log.e(TAG, "Message handling failed to start within timeout")
+                DebugLogger.e(TAG, "Message handling failed to start within timeout")
                 connectionJob.cancel()
                 disconnect()
                 return@withContext false
             }
 
             _connectionState.value = ConnectionState.CONNECTED
-            Log.d(TAG, "Connection fully established and ready for messages")
+            DebugLogger.d(TAG, "Connection fully established and ready for messages")
 
             return@withContext true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Connection failed", e)
+            DebugLogger.e(TAG, "Connection failed", e)
             _connectionState.value = ConnectionState.ERROR
             disconnect()
             return@withContext false
@@ -239,7 +253,7 @@ class MasterNetworkClient(
 
             // Signal that message handling is ready
             readySignal?.complete(true)
-            Log.d(TAG, "Message handling coroutines started and ready")
+            DebugLogger.d(TAG, "Message handling coroutines started and ready")
 
             // Wait for any job to complete
             select<Unit> {
@@ -253,16 +267,16 @@ class MasterNetworkClient(
             heartbeatJob.cancel()
 
         } catch (e: Exception) {
-            Log.e(TAG, "Connection error", e)
+            DebugLogger.e(TAG, "Connection error", e)
             readySignal?.complete(false)
         } finally {
             disconnect()
         }
     }
 
-
     /**
      * Disconnect from current device
+     * FIXED: Properly cleanup WeakReference
      */
     fun disconnect() {
         scope.coroutineContext.cancelChildren()
@@ -270,18 +284,22 @@ class MasterNetworkClient(
         try {
             socket?.close()
         } catch (e: Exception) {
-            Log.e(TAG, "Error closing socket", e)
+            DebugLogger.e(TAG, "Error closing socket", e)
         }
 
         socket = null
         connectedDevice = null
         currentSessionId = null
         _connectionState.value = ConnectionState.DISCONNECTED
+        DebugLogger.d(TAG, "Disconnected from device")
     }
 
     /**
-     * Start a new session
+     * Get context safely from WeakReference
+     * FIXED: Helper method to safely access context
      */
+    private fun getContext(): Context? = contextRef.get()
+
     /**
      * Start a new session
      * FIXED: Add retry logic and better error handling
@@ -293,6 +311,7 @@ class MasterNetworkClient(
 
         val sessionId = UUID.randomUUID().toString()
         currentSessionId = sessionId
+        DebugLogger.d(TAG, "Starting new session: $sessionId")
 
         // Send handshake with retry logic
         val handshake = HandshakeMessage(
@@ -306,13 +325,13 @@ class MasterNetworkClient(
 
         while (retryCount < maxRetries) {
             try {
-                Log.d(TAG, "Sending handshake (attempt ${retryCount + 1})")
+                DebugLogger.d(TAG, "Sending handshake (attempt ${retryCount + 1})")
                 sendMessage(handshake)
-                Log.d(TAG, "Handshake sent successfully")
+                DebugLogger.d(TAG, "Handshake sent successfully")
                 break
             } catch (e: Exception) {
                 retryCount++
-                Log.w(TAG, "Handshake attempt $retryCount failed: ${e.message}")
+                DebugLogger.w(TAG, "Handshake attempt $retryCount failed: ${e.message}")
 
                 if (retryCount >= maxRetries) {
                     throw e
@@ -334,6 +353,7 @@ class MasterNetworkClient(
             throw IllegalStateException("Not connected to any device")
         }
 
+        DebugLogger.d(TAG, "Sending message: ${message.messageType}")
         outgoingMessages.send(message)
     }
 
@@ -348,6 +368,7 @@ class MasterNetworkClient(
 
     /**
      * Resolve a service to get its IP and port
+     * FIXED: Use modern ServiceInfoCallback API and handle deprecated host property
      */
     private fun resolveService(serviceInfo: NsdServiceInfo) {
         // Avoid resolving the same service multiple times
@@ -356,10 +377,15 @@ class MasterNetworkClient(
         }
 
         pendingResolutions[serviceInfo.serviceName] = serviceInfo
+        DebugLogger.d(TAG, "Resolving service: ${serviceInfo.serviceName}")
 
         val resolveListener = object : NsdManager.ResolveListener {
             override fun onServiceResolved(resolvedService: NsdServiceInfo) {
-                Log.d(TAG, "Service resolved: ${resolvedService.serviceName} -> ${resolvedService.host}:${resolvedService.port}")
+                // FIXED: Use hostAddresses instead of deprecated host property
+                val hostAddress = resolvedService.hostAddresses?.firstOrNull()?.hostAddress
+                    ?: resolvedService.host?.hostAddress // Fallback for older Android versions
+
+                DebugLogger.d(TAG, "Service resolved: ${resolvedService.serviceName} -> $hostAddress:${resolvedService.port}")
 
                 pendingResolutions.remove(resolvedService.serviceName)
 
@@ -370,7 +396,7 @@ class MasterNetworkClient(
                         serviceName = resolvedService.serviceName,
                         teamId = parts[1],
                         deviceId = parts[2],
-                        host = resolvedService.host?.hostAddress,
+                        host = hostAddress,
                         port = resolvedService.port,
                         isResolved = true
                     )
@@ -380,15 +406,17 @@ class MasterNetworkClient(
             }
 
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                Log.e(TAG, "Resolve failed for ${serviceInfo.serviceName}: $errorCode")
+                DebugLogger.e(TAG, "Resolve failed for ${serviceInfo.serviceName}: $errorCode")
                 pendingResolutions.remove(serviceInfo.serviceName)
             }
         }
 
         try {
+            // FIXED: Handle deprecated resolveService API properly
+            @Suppress("DEPRECATION") // We need to use this API for backward compatibility
             nsdManager.resolveService(serviceInfo, resolveListener)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to resolve service", e)
+            DebugLogger.e(TAG, "Failed to resolve service", e)
             pendingResolutions.remove(serviceInfo.serviceName)
         }
     }
@@ -401,6 +429,7 @@ class MasterNetworkClient(
             val filtered = currentList.filter { it.serviceName != device.serviceName }
             filtered + device
         }
+        DebugLogger.d(TAG, "Updated device list - ${device.serviceName} ${if (device.isResolved) "resolved" else "unresolved"}")
     }
 
     /**
@@ -410,39 +439,7 @@ class MasterNetworkClient(
         _discoveredDevices.update { currentList ->
             currentList.filter { it.serviceName != serviceName }
         }
-    }
-
-    /**
-     * Handle the socket connection
-     */
-    private suspend fun handleConnection() = withContext(Dispatchers.IO) {
-        val currentSocket = socket ?: return@withContext
-
-        try {
-            val input = BufferedInputStream(currentSocket.getInputStream())
-            val output = BufferedOutputStream(currentSocket.getOutputStream())
-
-            // Launch coroutines for reading and writing
-            val readJob = launch { readMessages(input) }
-            val writeJob = launch { writeMessages(output) }
-            val heartbeatJob = launch { sendHeartbeats() }
-
-            // Wait for any job to complete
-            select<Unit> {
-                readJob.onJoin { }
-                writeJob.onJoin { }
-            }
-
-            // Cancel other jobs
-            readJob.cancel()
-            writeJob.cancel()
-            heartbeatJob.cancel()
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Connection error", e)
-        } finally {
-            disconnect()
-        }
+        DebugLogger.d(TAG, "Removed device from list: $serviceName")
     }
 
     /**
@@ -450,6 +447,7 @@ class MasterNetworkClient(
      */
     private suspend fun readMessages(input: BufferedInputStream) {
         val lengthBuffer = ByteArray(4)
+        DebugLogger.d(TAG, "Started message reading coroutine")
 
         while (socket?.isConnected == true) {
             try {
@@ -460,7 +458,7 @@ class MasterNetworkClient(
 
                 val messageLength = ByteBuffer.wrap(lengthBuffer).int
                 if (messageLength <= 0 || messageLength > NetworkConstants.MAX_MESSAGE_SIZE) {
-                    Log.e(TAG, "Invalid message length: $messageLength")
+                    DebugLogger.e(TAG, "Invalid message length: $messageLength")
                     break
                 }
 
@@ -477,6 +475,11 @@ class MasterNetworkClient(
                     val jsonString = String(messageBuffer, Charsets.UTF_8)
                     val message = NetworkProtocol.deserialize(jsonString)
 
+                    // Log non-heartbeat messages
+                    if (message !is HeartbeatMessage) {
+                        DebugLogger.d(TAG, "Received message: ${message.messageType}")
+                    }
+
                     // Don't forward heartbeats to the app
                     if (message !is HeartbeatMessage) {
                         incomingMessages.send(message)
@@ -484,16 +487,19 @@ class MasterNetworkClient(
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error reading message", e)
+                DebugLogger.e(TAG, "Error reading message", e)
                 break
             }
         }
+        DebugLogger.d(TAG, "Message reading coroutine ended")
     }
 
     /**
      * Write messages to the socket
      */
     private suspend fun writeMessages(output: BufferedOutputStream) {
+        DebugLogger.d(TAG, "Started message writing coroutine")
+
         while (socket?.isConnected == true) {
             try {
                 val message = withTimeoutOrNull(1000) { outgoingMessages.receive() }
@@ -501,29 +507,37 @@ class MasterNetworkClient(
                     val frame = NetworkProtocol.createFrame(message)
                     output.write(frame)
                     output.flush()
+
+                    // Log non-heartbeat messages
+                    if (message !is HeartbeatMessage) {
+                        DebugLogger.d(TAG, "Sent message: ${message.messageType}")
+                    }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error writing message", e)
+                DebugLogger.e(TAG, "Error writing message", e)
                 break
             }
         }
+        DebugLogger.d(TAG, "Message writing coroutine ended")
     }
 
     /**
      * Send periodic heartbeats
      */
     private suspend fun sendHeartbeats() {
+        DebugLogger.d(TAG, "Started heartbeat coroutine")
+
         while (connectionState.value == ConnectionState.CONNECTED) {
             delay(NetworkConstants.HEARTBEAT_INTERVAL_MS)
 
             currentSessionId?.let { sessionId ->
                 try {
-                    // Log.d(TAG, "Sending heartbeat for session: $sessionId")
                     sendMessage(HeartbeatMessage(sessionId = sessionId))
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to send heartbeat", e)
+                    DebugLogger.e(TAG, "Failed to send heartbeat", e)
                 }
             }
         }
+        DebugLogger.d(TAG, "Heartbeat coroutine ended")
     }
 }

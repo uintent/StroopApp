@@ -1,7 +1,6 @@
 package com.research.master.utils
 
 import android.content.Context
-import android.util.Log
 import com.research.master.network.NetworkManager
 import com.research.shared.models.RuntimeConfig
 import com.research.shared.network.*
@@ -58,19 +57,19 @@ object MasterTaskController {
         stroopTiming: StroopTimingParams? = null
     ): Boolean {
         if (!NetworkManager.isConnected()) {
-            Log.e(TAG, "Cannot start task: Not connected to Projector")
+            DebugLogger.e(TAG, "Cannot start task: Not connected to Projector")
             _taskState.value = TaskControlState.Error("Not connected to Projector")
             return false
         }
 
         if (_currentTask.value != null) {
-            Log.w(TAG, "Task already running, stopping current task first")
+            DebugLogger.w(TAG, "Task already running, stopping current task first")
             stopCurrentTask(context)
         }
 
         val config = MasterConfigManager.getCurrentConfig()
         if (config == null) {
-            Log.e(TAG, "Cannot start task: No configuration loaded")
+            DebugLogger.e(TAG, "Cannot start task: No configuration loaded")
             _taskState.value = TaskControlState.Error("No configuration loaded")
             return false
         }
@@ -91,7 +90,7 @@ object MasterTaskController {
 
             // Create task start command
             val sessionId = NetworkManager.getCurrentSessionId() ?: run {
-                Log.e(TAG, "No active session ID")
+                DebugLogger.e(TAG, "No active session ID")
                 _taskState.value = TaskControlState.Error("No active session")
                 return false
             }
@@ -118,11 +117,11 @@ object MasterTaskController {
             _currentTask.value = activeTask
             _taskState.value = TaskControlState.Running(activeTask)
 
-            Log.d(TAG, "Task started: $taskId, timeout: ${timeoutSeconds}s")
+            DebugLogger.d(TAG, "Task started: $taskId, timeout: ${timeoutSeconds}s")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start task", e)
+            DebugLogger.e(TAG, "Failed to start task", e)
             _taskState.value = TaskControlState.Error("Failed to start task: ${e.message}")
             false
         }
@@ -133,12 +132,12 @@ object MasterTaskController {
      */
     suspend fun stopCurrentTask(context: Context, reason: String = "manual_stop"): Boolean {
         val currentTask = _currentTask.value ?: run {
-            Log.w(TAG, "No task running to stop")
+            DebugLogger.w(TAG, "No task running to stop")
             return true
         }
 
         if (!NetworkManager.isConnected()) {
-            Log.e(TAG, "Cannot stop task: Not connected to Projector")
+            DebugLogger.e(TAG, "Cannot stop task: Not connected to Projector")
             return false
         }
 
@@ -146,7 +145,7 @@ object MasterTaskController {
             _taskState.value = TaskControlState.Stopping
 
             val sessionId = NetworkManager.getCurrentSessionId() ?: run {
-                Log.e(TAG, "No active session ID")
+                DebugLogger.e(TAG, "No active session ID")
                 return false
             }
 
@@ -163,11 +162,11 @@ object MasterTaskController {
             _currentTask.value = null
             _taskState.value = TaskControlState.Idle
 
-            Log.d(TAG, "Task stopped: ${currentTask.taskId}, reason: $reason")
+            DebugLogger.d(TAG, "Task stopped: ${currentTask.taskId}, reason: $reason")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop task", e)
+            DebugLogger.e(TAG, "Failed to stop task", e)
             _taskState.value = TaskControlState.Error("Failed to stop task: ${e.message}")
             false
         }
@@ -178,13 +177,13 @@ object MasterTaskController {
      */
     suspend fun resetProjector(context: Context): Boolean {
         if (!NetworkManager.isConnected()) {
-            Log.e(TAG, "Cannot reset: Not connected to Projector")
+            DebugLogger.e(TAG, "Cannot reset: Not connected to Projector")
             return false
         }
 
         return try {
             val sessionId = NetworkManager.getCurrentSessionId() ?: run {
-                Log.e(TAG, "No active session ID")
+                DebugLogger.e(TAG, "No active session ID")
                 return false
             }
 
@@ -197,11 +196,11 @@ object MasterTaskController {
             _currentTask.value = null
             _taskState.value = TaskControlState.Idle
 
-            Log.d(TAG, "Projector reset command sent")
+            DebugLogger.d(TAG, "Projector reset command sent")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to reset Projector", e)
+            DebugLogger.e(TAG, "Failed to reset Projector", e)
             false
         }
     }
@@ -212,14 +211,14 @@ object MasterTaskController {
     fun handleTaskTimeout(timeoutMessage: TaskTimeoutMessage) {
         val currentTask = _currentTask.value
         if (currentTask?.taskId == timeoutMessage.taskId) {
-            Log.d(TAG, "Task timed out: ${timeoutMessage.taskId}, " +
+            DebugLogger.d(TAG, "Task timed out: ${timeoutMessage.taskId}, " +
                     "duration: ${timeoutMessage.actualDuration}ms, " +
                     "stroops: ${timeoutMessage.stroopsDisplayed}")
 
             _currentTask.value = null
             _taskState.value = TaskControlState.Idle
         } else {
-            Log.w(TAG, "Received timeout for unknown task: ${timeoutMessage.taskId}")
+            DebugLogger.w(TAG, "Received timeout for unknown task: ${timeoutMessage.taskId}")
         }
     }
 
