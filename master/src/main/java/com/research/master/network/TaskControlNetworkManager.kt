@@ -60,7 +60,7 @@ class TaskControlNetworkManager(
                     minIntervalMs = timing.minInterval.toLong(),
                     maxIntervalMs = timing.maxInterval.toLong(),
                     countdownDurationMs = timing.countdownDuration * 1000L,
-                    colors = runtimeConfig?.baseConfig?.getColorWords() ?: listOf("rot", "blau", "grün", "gelb"),
+                    colors = runtimeConfig?.baseConfig?.getColorWords() ?: listOf("rot", "blau", "grün", "gelb", "schwarz", "orange", "lila"),
                     language = "de-DE"
                 )
             )
