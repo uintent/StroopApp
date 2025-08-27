@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.research.projector.models.*
 import com.research.projector.models.RuntimeConfig as ProjectorRuntimeConfig
 import com.research.projector.utils.FontSizer
-import com.research.projector.utils.FontSizingResult
 import com.research.projector.utils.StroopGenerator
 import com.research.projector.network.ProjectorNetworkManager
 import com.research.projector.network.ProjectorNetworkService
@@ -21,6 +20,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.util.Log
+import com.research.projector.utils.AllWordsFontSizingResult
+import com.research.projector.utils.WordFontSizingResult
 
 /**
  * Enhanced ViewModel for StroopDisplayActivity
@@ -701,28 +702,36 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
      * Calculate optimal font sizes for display
      */
     private fun calculateFontSizes(runtimeConfig: ProjectorRuntimeConfig, width: Int, height: Int) {
-        when (val result = fontSizer.calculateOptimalFontSize(runtimeConfig, width, height)) {
-            is FontSizingResult.Success -> {
-                val countdownSize = fontSizer.calculateCountdownFontSize(
-                    result.fontSize, width, height
-                )
+        when (val result = fontSizer.calculateFontSizesForAllWords(runtimeConfig, width, height)) {
+            is AllWordsFontSizingResult.Success -> {
+                val countdownSize = fontSizer.calculateCountdownFontSize(width, height)
+
+                // Find longest word for compatibility
+                val longestWord = result.sizingResults.maxByOrNull { it.word.length }?.word ?: "unknown"
+
+                // Calculate representative utilization
+                val avgUtilization = result.sizingResults.map { it.getMaxUtilization() }.average().toFloat()
 
                 _fontInfo.value = FontInfo(
-                    stroopFontSize = result.fontSize,
+                    stroopFontSize = result.averageFontSize,
                     countdownFontSize = countdownSize,
-                    longestWord = result.longestWord,
-                    utilization = result.getUtilization()
+                    longestWord = longestWord,
+                    utilization = avgUtilization,
+                    wordFontSizes = result.wordFontSizes,
+                    fontSizeRange = "${result.minFontSize.toInt()}-${result.maxFontSize.toInt()}sp"
                 )
             }
 
-            is FontSizingResult.Error -> {
+            is AllWordsFontSizingResult.Error -> {
                 _errorEvent.value = "Font sizing error: ${result.message}"
                 // Use fallback sizes
                 _fontInfo.value = FontInfo(
                     stroopFontSize = 72f,
                     countdownFontSize = 120f,
                     longestWord = "fallback",
-                    utilization = 0.5f
+                    utilization = 0.5f,
+                    wordFontSizes = emptyMap(),
+                    fontSizeRange = "72sp"
                 )
             }
         }
@@ -944,7 +953,9 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         // Update display state
         _displayState.value = StimulusDisplayState.DISPLAY
-        _displayContent.value = DisplayContent.Stroop(timedStimulus.stimulus)
+        val fontSize = _fontInfo.value?.getFontSizeForWord(timedStimulus.stimulus.colorWord) ?: 72f
+
+        _displayContent.value = DisplayContent.Stroop(timedStimulus.stimulus, fontSize)
 
         // ENHANCED: Send detailed Stroop information to Master
         sendStroopStartedToMaster(timedStimulus)
@@ -1278,7 +1289,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
  */
 sealed class DisplayContent {
     data class Countdown(val number: Int) : DisplayContent()
-    data class Stroop(val stimulus: StroopStimulus) : DisplayContent()
+    data class Stroop(val stimulus: StroopStimulus, val fontSize: Float) : DisplayContent()
     object Interval : DisplayContent()
     object BlackScreen : DisplayContent()
     object PausedScreen : DisplayContent()
@@ -1288,13 +1299,23 @@ sealed class DisplayContent {
  * Font sizing information
  */
 data class FontInfo(
-    val stroopFontSize: Float,
+    val stroopFontSize: Float,              // Representative/average font size
     val countdownFontSize: Float,
     val longestWord: String,
-    val utilization: Float
+    val utilization: Float,
+    val wordFontSizes: Map<String, Float> = emptyMap(),  // Per-word font sizes
+    val fontSizeRange: String = ""           // Range description like "60-150sp"
 ) {
     fun getSummary(): String {
-        return "Stroop: ${stroopFontSize}sp, Countdown: ${countdownFontSize}sp, Utilization: ${(utilization * 100).toInt()}%"
+        return if (wordFontSizes.isNotEmpty()) {
+            "Fonts: $fontSizeRange (avg: ${stroopFontSize.toInt()}sp), Countdown: ${countdownFontSize.toInt()}sp, Utilization: ${(utilization * 100).toInt()}%"
+        } else {
+            "Stroop: ${stroopFontSize}sp, Countdown: ${countdownFontSize}sp, Utilization: ${(utilization * 100).toInt()}%"
+        }
+    }
+
+    fun getFontSizeForWord(word: String): Float {
+        return wordFontSizes[word] ?: stroopFontSize
     }
 }
 

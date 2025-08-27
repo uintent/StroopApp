@@ -10,115 +10,163 @@ import com.research.projector.models.RuntimeConfig
 import kotlin.math.min
 
 /**
- * Utility class for automatically sizing fonts to fit Stroop stimuli optimally.
- * Calculates font sizes based on the longest color word and available display area.
+ * UPDATED: FontSizer now calculates optimal size for each word individually
+ * Each word uses the maximum possible font size that fits within screen constraints
  */
 class FontSizer(private val context: Context) {
-    
+
     private val displayMetrics: DisplayMetrics = context.resources.displayMetrics
-    
+
     companion object {
         // Font sizing constraints (in sp)
         private const val MIN_FONT_SIZE_SP = 24f
-        private const val MAX_FONT_SIZE_SP = 200f
-        private const val DEFAULT_FONT_SIZE_SP = 72f
-        
+        private const val MAX_FONT_SIZE_SP = 300f // Increased max for short words
+
         // Margin in dp (approximately 1cm as specified)
         private const val HORIZONTAL_MARGIN_DP = 38f
         private const val VERTICAL_MARGIN_DP = 20f
-        
+
         // Safety margins to ensure text doesn't touch edges
         private const val SAFETY_MARGIN_DP = 8f
-        
+
         // Font family for consistent rendering
         private const val FONT_FAMILY = "sans-serif"
     }
-    
+
     /**
-     * Calculate optimal font size for Stroop display based on available words
-     * and screen dimensions with specified margins
+     * Calculate optimal font size for a specific word
+     * Each word gets the maximum size that fits within available space
      */
-    fun calculateOptimalFontSize(
-        runtimeConfig: RuntimeConfig,
+    fun calculateOptimalFontSizeForWord(
+        word: String,
         availableWidth: Int,
         availableHeight: Int
-    ): FontSizingResult {
-        
-        val colorWords = runtimeConfig.baseConfig.getColorWords()
-        
-        if (colorWords.isEmpty()) {
-            return FontSizingResult.Error("No color words available for sizing")
+    ): WordFontSizingResult {
+
+        if (word.isEmpty()) {
+            return WordFontSizingResult.Error("Empty word provided")
         }
-        
-        // Find the longest word (by rendered width)
-        val longestWord = findLongestWord(colorWords)
-        
+
         // Calculate available display area with margins
         val horizontalMarginPx = dpToPx(HORIZONTAL_MARGIN_DP * 2) // left + right
         val verticalMarginPx = dpToPx(VERTICAL_MARGIN_DP * 2) // top + bottom
         val safetyMarginPx = dpToPx(SAFETY_MARGIN_DP * 2) // additional safety
-        
+
         val maxTextWidth = availableWidth - horizontalMarginPx - safetyMarginPx
         val maxTextHeight = availableHeight - verticalMarginPx - safetyMarginPx
-        
+
         if (maxTextWidth <= 0 || maxTextHeight <= 0) {
-            return FontSizingResult.Error("Insufficient display area after margins")
+            return WordFontSizingResult.Error("Insufficient display area after margins")
         }
-        
-        // Binary search for optimal font size
-        val optimalSize = findOptimalFontSize(
-            text = longestWord,
+
+        // Binary search for optimal font size for this specific word
+        val optimalSize = findOptimalFontSizeForWord(
+            word = word,
             maxWidth = maxTextWidth,
             maxHeight = maxTextHeight
         )
-        
-        return FontSizingResult.Success(
+
+        val actualWidth = calculateTextWidth(word, spToPx(optimalSize))
+        val actualHeight = calculateTextHeight(word, spToPx(optimalSize))
+
+        return WordFontSizingResult.Success(
+            word = word,
             fontSize = optimalSize,
-            longestWord = longestWord,
-            textWidth = calculateTextWidth(longestWord, optimalSize),
-            textHeight = calculateTextHeight(longestWord, optimalSize),
+            textWidth = actualWidth,
+            textHeight = actualHeight,
             availableWidth = maxTextWidth,
-            availableHeight = maxTextHeight
+            availableHeight = maxTextHeight,
+            utilizationWidth = actualWidth / maxTextWidth,
+            utilizationHeight = actualHeight / maxTextHeight
         )
     }
-    
+
     /**
-     * Find the word that will render with the largest width
+     * Calculate optimal font sizes for all possible words in configuration
+     * Returns a map of word -> font size for efficient lookup during display
      */
-    private fun findLongestWord(words: List<String>): String {
-        var longestWord = words.first()
-        var maxWidth = 0f
-        
-        // Use a base font size for comparison
-        val baseFontSize = spToPx(DEFAULT_FONT_SIZE_SP)
-        
-        for (word in words) {
-            val width = calculateTextWidth(word, baseFontSize)
-            if (width > maxWidth) {
-                maxWidth = width
-                longestWord = word
+    fun calculateFontSizesForAllWords(
+        runtimeConfig: RuntimeConfig,
+        availableWidth: Int,
+        availableHeight: Int
+    ): AllWordsFontSizingResult {
+
+        val colorWords = runtimeConfig.baseConfig.getColorWords()
+
+        if (colorWords.isEmpty()) {
+            return AllWordsFontSizingResult.Error("No color words available for sizing")
+        }
+
+        val wordFontSizes = mutableMapOf<String, Float>()
+        val sizingResults = mutableListOf<WordFontSizingResult.Success>()
+
+        for (word in colorWords) {
+            when (val result = calculateOptimalFontSizeForWord(word, availableWidth, availableHeight)) {
+                is WordFontSizingResult.Success -> {
+                    wordFontSizes[word] = result.fontSize
+                    sizingResults.add(result)
+                }
+                is WordFontSizingResult.Error -> {
+                    // Use fallback size for problematic words
+                    wordFontSizes[word] = 72f
+                }
             }
         }
-        
-        return longestWord
+
+        // Calculate statistics
+        val fontSizes = wordFontSizes.values.toList()
+        val minSize = fontSizes.minOrNull() ?: 72f
+        val maxSize = fontSizes.maxOrNull() ?: 72f
+        val avgSize = fontSizes.average().toFloat()
+
+        return AllWordsFontSizingResult.Success(
+            wordFontSizes = wordFontSizes,
+            sizingResults = sizingResults,
+            minFontSize = minSize,
+            maxFontSize = maxSize,
+            averageFontSize = avgSize,
+            fontSizeVariation = maxSize - minSize
+        )
     }
-    
+
     /**
-     * Binary search to find the largest font size that fits within constraints
+     * Get optimal font size for a specific word during display
+     * This is the main method called during Stroop display
      */
-    private fun findOptimalFontSize(text: String, maxWidth: Int, maxHeight: Int): Float {
+    fun getFontSizeForWord(
+        word: String,
+        preCalculatedSizes: Map<String, Float>
+    ): Float {
+        return preCalculatedSizes[word] ?: run {
+            // Fallback: calculate on-the-fly if not pre-calculated
+            val result = calculateOptimalFontSizeForWord(
+                word,
+                getCurrentDisplayWidth(),
+                getCurrentDisplayHeight()
+            )
+            when (result) {
+                is WordFontSizingResult.Success -> result.fontSize
+                is WordFontSizingResult.Error -> 72f // Safe fallback
+            }
+        }
+    }
+
+    /**
+     * Binary search to find the largest font size that fits within constraints for specific word
+     */
+    private fun findOptimalFontSizeForWord(word: String, maxWidth: Int, maxHeight: Int): Float {
         var minSize = MIN_FONT_SIZE_SP
         var maxSize = MAX_FONT_SIZE_SP
-        var optimalSize = DEFAULT_FONT_SIZE_SP
-        
+        var optimalSize = minSize
+
         // Binary search with precision of 0.5sp
         while (maxSize - minSize > 0.5f) {
             val testSize = (minSize + maxSize) / 2f
             val testSizePx = spToPx(testSize)
-            
-            val textWidth = calculateTextWidth(text, testSizePx)
-            val textHeight = calculateTextHeight(text, testSizePx)
-            
+
+            val textWidth = calculateTextWidth(word, testSizePx)
+            val textHeight = calculateTextHeight(word, testSizePx)
+
             if (textWidth <= maxWidth && textHeight <= maxHeight) {
                 // Size fits, try larger
                 optimalSize = testSize
@@ -128,10 +176,10 @@ class FontSizer(private val context: Context) {
                 maxSize = testSize
             }
         }
-        
+
         return optimalSize
     }
-    
+
     /**
      * Calculate text width for given text and font size
      */
@@ -139,7 +187,7 @@ class FontSizer(private val context: Context) {
         val paint = createPaint(fontSizePx)
         return paint.measureText(text)
     }
-    
+
     /**
      * Calculate text height for given text and font size
      */
@@ -149,7 +197,7 @@ class FontSizer(private val context: Context) {
         paint.getTextBounds(text, 0, text.length, rect)
         return rect.height().toFloat()
     }
-    
+
     /**
      * Create Paint object with specified font size and styling
      */
@@ -159,65 +207,25 @@ class FontSizer(private val context: Context) {
             typeface = Typeface.create(FONT_FAMILY, Typeface.BOLD)
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
-            // Remove font padding for accurate measurements
             isSubpixelText = true
         }
     }
-    
+
     /**
-     * Calculate countdown font size (larger than Stroop text)
+     * Calculate countdown font size (should be consistent, not word-dependent)
      */
     fun calculateCountdownFontSize(
-        stroopFontSize: Float,
         availableWidth: Int,
         availableHeight: Int
     ): Float {
-        // Countdown should be larger than Stroop text but fit "3", "2", "1", "0"
-        val baseCountdownSize = stroopFontSize * 1.5f
-        
-        // Test with "3" (typical widest single digit)
-        val maxCountdownSize = findOptimalFontSize(
-            text = "3",
-            maxWidth = availableWidth - dpToPx(SAFETY_MARGIN_DP * 2),
-            maxHeight = availableHeight - dpToPx(SAFETY_MARGIN_DP * 2)
-        )
-        
-        // Use the smaller of the calculated sizes
-        return min(baseCountdownSize, maxCountdownSize)
-    }
-    
-    /**
-     * Get font sizing information for all words
-     */
-    fun analyzeFontSizing(
-        runtimeConfig: RuntimeConfig,
-        fontSize: Float
-    ): FontAnalysis {
-        val colorWords = runtimeConfig.baseConfig.getColorWords()
-        val fontSizePx = spToPx(fontSize)
-        
-        val wordMeasurements = colorWords.map { word ->
-            WordMeasurement(
-                word = word,
-                width = calculateTextWidth(word, fontSizePx),
-                height = calculateTextHeight(word, fontSizePx)
-            )
+        // Countdown uses single digits, optimize for "3" (typically widest)
+        val result = calculateOptimalFontSizeForWord("3", availableWidth, availableHeight)
+        return when (result) {
+            is WordFontSizingResult.Success -> result.fontSize
+            is WordFontSizingResult.Error -> 120f // Safe fallback
         }
-        
-        val maxWidth = wordMeasurements.maxOfOrNull { it.width } ?: 0f
-        val minWidth = wordMeasurements.minOfOrNull { it.width } ?: 0f
-        val avgWidth = wordMeasurements.map { it.width }.average().toFloat()
-        
-        return FontAnalysis(
-            fontSize = fontSize,
-            wordMeasurements = wordMeasurements,
-            maxWidth = maxWidth,
-            minWidth = minWidth,
-            averageWidth = avgWidth,
-            widthVariation = maxWidth - minWidth
-        )
     }
-    
+
     /**
      * Validate font size for research requirements
      */
@@ -225,28 +233,28 @@ class FontSizer(private val context: Context) {
         if (fontSize < MIN_FONT_SIZE_SP) {
             return FontValidationResult.Error("Font size too small for readability: ${fontSize}sp")
         }
-        
+
         if (fontSize > MAX_FONT_SIZE_SP) {
             return FontValidationResult.Error("Font size too large: ${fontSize}sp")
         }
-        
+
         // Check if font is reasonable for screen size
         val fontSizePx = spToPx(fontSize)
         val screenSizeInches = pxToInches(screenSizePx)
         val fontSizeInches = pxToInches(fontSizePx.toInt())
-        
-        // Font should be between 0.2" and 2" for good readability
+
+        // Font should be between 0.2" and 3" for good readability (increased max for short words)
         if (fontSizeInches < 0.2f) {
             return FontValidationResult.Error("Font too small for peripheral vision reading")
         }
-        
-        if (fontSizeInches > 2.0f) {
+
+        if (fontSizeInches > 3.0f) {
             return FontValidationResult.Error("Font unnecessarily large")
         }
-        
+
         return FontValidationResult.Valid(fontSize)
     }
-    
+
     /**
      * Utility functions for unit conversion
      */
@@ -255,114 +263,90 @@ class FontSizer(private val context: Context) {
             TypedValue.COMPLEX_UNIT_DIP, dp, displayMetrics
         ).toInt()
     }
-    
+
     private fun spToPx(sp: Float): Float {
         return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_SP, sp, displayMetrics
         )
     }
-    
+
     private fun pxToInches(px: Int): Float {
         return px / displayMetrics.densityDpi.toFloat()
     }
-    
-    /**
-     * Get font sizing recommendations for different screen sizes
-     */
-    fun getFontSizeRecommendations(): FontRecommendations {
-        return FontRecommendations(
-            phonePortrait = FontSizeRange(32f, 48f),
-            phoneLandscape = FontSizeRange(48f, 72f),
-            tabletPortrait = FontSizeRange(56f, 84f),
-            tabletLandscape = FontSizeRange(72f, 120f)
-        )
-    }
+
+    // Temporary methods - should be injected from display
+    private fun getCurrentDisplayWidth(): Int = 1920  // TODO: Get from actual display
+    private fun getCurrentDisplayHeight(): Int = 1080  // TODO: Get from actual display
 }
 
 /**
- * Result of font size calculation
+ * Result of font size calculation for a single word
  */
-sealed class FontSizingResult {
+sealed class WordFontSizingResult {
     data class Success(
+        val word: String,
         val fontSize: Float,
-        val longestWord: String,
         val textWidth: Float,
         val textHeight: Float,
         val availableWidth: Int,
-        val availableHeight: Int
-    ) : FontSizingResult() {
-        
-        fun getUtilization(): Float {
-            val widthUtil = textWidth / availableWidth
-            val heightUtil = textHeight / availableHeight
-            return maxOf(widthUtil, heightUtil)
-        }
-        
+        val availableHeight: Int,
+        val utilizationWidth: Float,
+        val utilizationHeight: Float
+    ) : WordFontSizingResult() {
+
+        fun getMaxUtilization(): Float = maxOf(utilizationWidth, utilizationHeight)
+
         fun getSummary(): String {
-            return "Font: ${fontSize}sp, Word: '$longestWord', Size: ${textWidth.toInt()}x${textHeight.toInt()}px, Utilization: ${(getUtilization() * 100).toInt()}%"
+            return "Word: '$word', Font: ${fontSize}sp, Size: ${textWidth.toInt()}x${textHeight.toInt()}px, Util: ${(getMaxUtilization() * 100).toInt()}%"
         }
     }
-    
-    data class Error(val message: String) : FontSizingResult()
+
+    data class Error(val message: String) : WordFontSizingResult()
 }
 
 /**
- * Font validation result
+ * Result of font size calculation for all words
+ */
+sealed class AllWordsFontSizingResult {
+    data class Success(
+        val wordFontSizes: Map<String, Float>,
+        val sizingResults: List<WordFontSizingResult.Success>,
+        val minFontSize: Float,
+        val maxFontSize: Float,
+        val averageFontSize: Float,
+        val fontSizeVariation: Float
+    ) : AllWordsFontSizingResult() {
+
+        fun getConsistencyRating(): String {
+            val variationRatio = if (averageFontSize > 0) fontSizeVariation / averageFontSize else 0f
+            return when {
+                variationRatio < 0.2f -> "Very Consistent"
+                variationRatio < 0.4f -> "Moderately Consistent"
+                variationRatio < 0.6f -> "Somewhat Variable"
+                else -> "Highly Variable"
+            }
+        }
+
+        fun getSummary(): String {
+            return "Font range: ${minFontSize.toInt()}-${maxFontSize.toInt()}sp (avg: ${averageFontSize.toInt()}sp), ${getConsistencyRating()}"
+        }
+
+        fun getWordsWithSmallFonts(threshold: Float = 50f): List<String> {
+            return wordFontSizes.filter { it.value < threshold }.keys.toList()
+        }
+
+        fun getWordsWithLargeFonts(threshold: Float = 120f): List<String> {
+            return wordFontSizes.filter { it.value > threshold }.keys.toList()
+        }
+    }
+
+    data class Error(val message: String) : AllWordsFontSizingResult()
+}
+
+/**
+ * Font validation result (unchanged)
  */
 sealed class FontValidationResult {
     data class Valid(val fontSize: Float) : FontValidationResult()
     data class Error(val message: String) : FontValidationResult()
-}
-
-/**
- * Analysis of font sizing for all words
- */
-data class FontAnalysis(
-    val fontSize: Float,
-    val wordMeasurements: List<WordMeasurement>,
-    val maxWidth: Float,
-    val minWidth: Float,
-    val averageWidth: Float,
-    val widthVariation: Float
-) {
-    fun getConsistencyRating(): String {
-        val variationRatio = widthVariation / averageWidth
-        return when {
-            variationRatio < 0.3f -> "Excellent"
-            variationRatio < 0.5f -> "Good"
-            variationRatio < 0.8f -> "Fair"
-            else -> "Poor"
-        }
-    }
-}
-
-/**
- * Measurement data for individual words
- */
-data class WordMeasurement(
-    val word: String,
-    val width: Float,
-    val height: Float
-)
-
-/**
- * Font size recommendations for different screen configurations
- */
-data class FontRecommendations(
-    val phonePortrait: FontSizeRange,
-    val phoneLandscape: FontSizeRange,
-    val tabletPortrait: FontSizeRange,
-    val tabletLandscape: FontSizeRange
-)
-
-/**
- * Font size range with min and max values
- */
-data class FontSizeRange(
-    val minSize: Float,
-    val maxSize: Float
-) {
-    fun contains(size: Float): Boolean = size in minSize..maxSize
-    
-    fun getRecommended(): Float = (minSize + maxSize) / 2f
 }
