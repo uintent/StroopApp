@@ -819,7 +819,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         android.util.Log.d("DisplaySequence", "Countdown duration from config: ${timing.countdownDuration}")
 
         // FINAL FIX: countdownDuration is already in milliseconds (4000ms), use directly
-        val countdownDurationMs = timing.countdownDuration.toLong()
+        val countdownDurationMs = timing.countdownDuration.toLong() * 1000L
         android.util.Log.d("DisplaySequence", "Countdown duration calculated: ${countdownDurationMs}ms")
 
         // Create countdown state with correct timing
@@ -872,7 +872,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         // Check if timing has countdownMillis() method or similar
         val countdownMillis = try {
-            timing.countdownDuration.toLong()  // ✅ FIXED: Use directly, don't multiply by 1000 again
+            timing.countdownDuration.toLong() * 1000L // ✅ FIXED: Use directly, don't multiply by 1000 again
         } catch (e: Exception) {
             android.util.Log.e("Countdown", "Error getting countdown millis", e)
             4000L  // Fallback to 4 seconds
