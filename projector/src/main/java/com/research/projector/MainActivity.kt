@@ -314,22 +314,15 @@ class MainActivity : AppCompatActivity() {
             throw IllegalArgumentException("Master provided insufficient colors: ${stroopSettings.colors.size}")
         }
 
-        // Create color mappings - Master should ideally provide these
-        val stroopColors = stroopSettings.colors.associateWith { colorName ->
-            when (colorName.lowercase()) {
-                "rot" -> "#FF0000"
-                "blau" -> "#0000FF"
-                "grün", "green" -> "#00FF00"
-                "gelb", "yellow" -> "#FFFF00"
-                "schwarz", "black" -> "#000000"
-                "braun", "brown" -> "#8B4513"
-                "orange" -> "#FF8000"
-                "lila", "purple" -> "#800080"
-                else -> {
-                    android.util.Log.w("ProjectorApp", "⚠️ Unknown color from Master: $colorName")
-                    "#808080" // Gray for unknown colors
-                }
-            }
+        // USE MASTER'S COLOR MAPPINGS DIRECTLY - NO HARDCODED FALLBACKS
+        if (stroopSettings.colorMappings.isEmpty()) {
+            throw IllegalArgumentException("Master must provide colorMappings - no fallback allowed")
+        }
+
+        val stroopColors = stroopSettings.colorMappings
+        android.util.Log.d("ProjectorApp", "Color mappings from Master:")
+        stroopColors.forEach { (name, hex) ->
+            android.util.Log.d("ProjectorApp", "  '$name' -> '$hex'")
         }
 
         android.util.Log.d("ProjectorApp", "✅ Color mappings created: ${stroopColors.size} colors")
@@ -346,11 +339,11 @@ class MainActivity : AppCompatActivity() {
             throw IllegalArgumentException("Invalid interval range from Master")
         }
 
-        // Create base configuration
+        // Create base configuration using Master's exact color mappings
         val baseConfig = StroopConfig(
-            stroopColors = stroopColors,
-            tasks = emptyMap(), // Not needed for display
-            taskLists = emptyMap(), // Not needed for display
+            stroopColors = stroopColors, // Use Master's mappings directly
+            tasks = emptyMap(),
+            taskLists = emptyMap(),
             timing = TimingConfig(
                 stroopDisplayDuration = stroopSettings.displayDurationMs.toInt(),
                 minInterval = stroopSettings.minIntervalMs.toInt(),

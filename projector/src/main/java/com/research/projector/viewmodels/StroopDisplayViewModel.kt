@@ -206,9 +206,8 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
             Log.d("StroopDisplay", "✅ Set currentTaskId = ${message.taskId}")
             Log.d("StroopDisplay", "Current masterControlled after setting: $masterControlled")
 
-            // Extract configuration from message - handle different property names
+            // Extract configuration from message
             val stroopConfig = try {
-                // Try to access stroopSettings property
                 val field = message::class.java.getDeclaredField("stroopSettings")
                 field.isAccessible = true
                 field.get(message) as StroopSettings
@@ -216,6 +215,14 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                 Log.e("StroopDisplay", "StartTaskMessage missing stroopSettings property", e)
                 throw IllegalArgumentException("Master message missing required Stroop configuration")
             }
+
+            Log.d("StroopDisplay", "=== MASTER CONFIG RECEIVED ===")
+            Log.d("StroopDisplay", "Colors from Master: ${stroopConfig.colors.size}")
+            stroopConfig.colors.forEach { colorName ->
+                Log.d("StroopDisplay", "  Master sent color: '$colorName'")
+            }
+            Log.d("StroopDisplay", "Display duration: ${stroopConfig.displayDurationMs}ms")
+            Log.d("StroopDisplay", "Interval range: ${stroopConfig.minIntervalMs}-${stroopConfig.maxIntervalMs}ms")
 
             // Extract timeout from message - handle different property names
             val timeoutSeconds = try {
@@ -227,6 +234,7 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
                     else -> throw IllegalArgumentException("Invalid timeout type")
                 }
             } catch (e: Exception) {
+                Log.e("StroopDisplay", "Error handling start task command", e)
                 Log.e("StroopDisplay", "StartTaskMessage missing timeoutSeconds property", e)
                 throw IllegalArgumentException("Master message missing required timeout")
             }
@@ -448,40 +456,74 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
         _taskExecutionState.value = null
     }
 
-    /**
-     * Convert Master's StroopSettings to projector's RuntimeConfig format
-     * STRICT: No defaults - Master must provide complete configuration
-     */
     private fun createProjectorRuntimeConfigFromStroopSettings(stroopSettings: StroopSettings): ProjectorRuntimeConfig {
-        android.util.Log.d("StroopDisplay", "Converting Master config: ${stroopSettings.colors.size} colors, ${stroopSettings.displayDurationMs}ms display")
+        Log.d("StroopDisplay", "=== CONVERTING MASTER CONFIG ===")
+        Log.d("StroopDisplay", "Colors from Master: ${stroopSettings.colors.size}")
+        stroopSettings.colors.forEach { colorName ->
+            Log.d("StroopDisplay", "  Master sent color: '$colorName'")
+        }
+
+        // Check if Master provided color mappings
+        val hasColorMappings = stroopSettings.colorMappings.isNotEmpty()
+        Log.d("StroopDisplay", "Master provided color mappings: $hasColorMappings")
+
+        if (!hasColorMappings) {
+            throw IllegalArgumentException("Master MUST provide color mappings. No fallback allowed.")
+        }
+
+        Log.d("StroopDisplay", "Color mappings from Master:")
+        stroopSettings.colorMappings.forEach { (name, hex) ->
+            Log.d("StroopDisplay", "  '$name' -> '$hex'")
+        }
 
         // Validate Master provided sufficient colors
         if (stroopSettings.colors.size < 2) {
             throw IllegalArgumentException("Master must provide at least 2 colors for Stroop test. Received: ${stroopSettings.colors.size}")
         }
 
-        // Master must provide color mappings - we don't guess
-        val stroopColors = stroopSettings.colors.associateWith { colorName ->
-            // Use the actual colors the Master intends
-            // NOTE: Master should ideally send color mappings, not just names
-            // For now, use the standard mapping but this should be enhanced
-            when (colorName.lowercase()) {
-                "rot" -> "#FF0000"
-                "blau" -> "#0000FF"
-                "grün", "green" -> "#00FF00"
-                "gelb", "yellow" -> "#FFFF00"
-                "schwarz", "black" -> "#000000"
-                "braun", "brown" -> "#8B4513"
-                "orange" -> "#FF8000"
-                "lila", "purple" -> "#800080"
-                else -> {
-                    android.util.Log.w("StroopDisplay", "Unknown color from Master: $colorName, using default")
-                    "#808080" // Gray for unknown colors - Master should provide proper mapping
-                }
+        // Use ONLY the color mappings from Master - NO FALLBACK
+        val stroopColors = stroopSettings.colorMappings
+
+        Log.d("StroopDisplay", "Final color mappings: ${stroopColors.size} colors")
+        stroopColors.forEach { (name, hex) ->
+            Log.d("StroopDisplay", "  Final: '$name' -> '$hex'")
+        }
+
+        // Test color integer parsing BEFORE creating config
+        Log.d("StroopDisplay", "=== TESTING COLOR INTEGER PARSING ===")
+        val testColorInts = mutableMapOf<String, Int>()
+        val failedColors = mutableListOf<String>()
+
+        stroopColors.forEach { (colorName, hexValue) ->
+            try {
+                val colorInt = android.graphics.Color.parseColor(hexValue)
+                testColorInts[colorName] = colorInt
+                Log.d("StroopDisplay", "✅ Parsed color '$colorName' ($hexValue) -> $colorInt")
+            } catch (e: Exception) {
+                Log.e("StroopDisplay", "❌ Failed to parse color '$hexValue' for '$colorName'", e)
+                failedColors.add("$colorName ($hexValue)")
             }
         }
 
-        // Validate timing values from Master
+        if (failedColors.isNotEmpty()) {
+            throw IllegalArgumentException("Color parsing failed for: ${failedColors.joinToString(", ")}")
+        }
+
+        // Verify that parsed colors are actually different
+        val uniqueColorInts = testColorInts.values.toSet()
+        Log.d("StroopDisplay", "Unique color integers: ${uniqueColorInts.size} out of ${testColorInts.size}")
+
+        if (uniqueColorInts.size < 2) {
+            Log.e("StroopDisplay", "CRITICAL ERROR: All colors parsed to same integer values!")
+            testColorInts.forEach { (name, colorInt) ->
+                Log.e("StroopDisplay", "  $name -> $colorInt")
+            }
+            throw IllegalArgumentException("All colors have same integer value - invalid hex colors from Master")
+        }
+
+        Log.d("StroopDisplay", "✅ Color integer parsing validation passed")
+
+        // Rest of timing validation stays the same...
         if (stroopSettings.displayDurationMs <= 0) {
             throw IllegalArgumentException("Invalid display duration from Master: ${stroopSettings.displayDurationMs}")
         }
@@ -494,9 +536,9 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
 
         // Create projector's base config using Master's exact specifications
         val baseConfig = com.research.projector.models.StroopConfig(
-            stroopColors = stroopColors,
-            tasks = emptyMap(), // Tasks are not needed for Stroop display
-            taskLists = emptyMap(), // Task lists are not needed for Stroop display
+            stroopColors = stroopColors, // Use Master's mappings directly
+            tasks = emptyMap(),
+            taskLists = emptyMap(),
             timing = com.research.projector.models.TimingConfig(
                 stroopDisplayDuration = stroopSettings.displayDurationMs.toInt(),
                 minInterval = stroopSettings.minIntervalMs.toInt(),
@@ -505,6 +547,31 @@ class StroopDisplayViewModel(application: Application) : AndroidViewModel(applic
             )
         )
 
+        Log.d("StroopDisplay", "Created base config successfully")
+
+        // FINAL VERIFICATION: Test the actual StroopConfig.getColorInts() method
+        Log.d("StroopDisplay", "=== FINAL VERIFICATION ===")
+        try {
+            val finalColorInts = baseConfig.getColorInts()
+            Log.d("StroopDisplay", "StroopConfig.getColorInts() returned ${finalColorInts.size} colors:")
+            finalColorInts.forEach { (name, colorInt) ->
+                Log.d("StroopDisplay", "  Final config color: '$name' -> $colorInt")
+            }
+
+            val finalUniqueInts = finalColorInts.values.toSet()
+            if (finalUniqueInts.size < 2) {
+                Log.e("StroopDisplay", "CRITICAL: StroopConfig.getColorInts() returned identical values!")
+                throw IllegalArgumentException("StroopConfig color parsing failed - all colors identical")
+            }
+
+            Log.d("StroopDisplay", "✅ Final verification passed: ${finalUniqueInts.size} unique color integers")
+
+        } catch (e: Exception) {
+            Log.e("StroopDisplay", "CRITICAL: StroopConfig.getColorInts() failed!", e)
+            throw IllegalArgumentException("StroopConfig color parsing failed: ${e.message}")
+        }
+
+        Log.d("StroopDisplay", "=== CONFIG CONVERSION COMPLETE ===")
         return ProjectorRuntimeConfig(baseConfig = baseConfig)
     }
 

@@ -27,6 +27,7 @@ class TaskControlNetworkManager(
      * Start a task on the Projector
      * FR-TM-001: Manual task start/stop
      * FIXED: Now sends actual StartTaskMessage
+     * ENHANCED: Added comprehensive color mapping debug logging
      */
     suspend fun startTask(
         taskId: String,
@@ -36,6 +37,7 @@ class TaskControlNetworkManager(
         runtimeConfig: RuntimeConfig? = null
     ): Boolean {
         return try {
+            DebugLogger.d("TaskControl", "=== STARTING TASK DEBUG ===")
             DebugLogger.d("TaskControl", "Starting task: $taskId with timeout: ${taskTimeoutMs}ms")
 
             // DEBUG: Check if RuntimeConfig is provided
@@ -50,6 +52,18 @@ class TaskControlNetworkManager(
                 val stroopColors = runtimeConfig.baseConfig?.stroopColors
                 DebugLogger.d("TaskControl", "Stroop colors from config: $stroopColors")
                 DebugLogger.d("TaskControl", "Stroop colors count: ${stroopColors?.size ?: 0}")
+
+                // ENHANCED DEBUG: Detailed color mapping inspection
+                if (stroopColors != null && stroopColors.isNotEmpty()) {
+                    DebugLogger.d("TaskControl", "=== COLOR MAPPINGS DETAILED INSPECTION ===")
+                    stroopColors.forEach { (name, hex) ->
+                        DebugLogger.d("TaskControl", "  Config color: '$name' -> '$hex'")
+                    }
+                } else {
+                    DebugLogger.w("TaskControl", "WARNING: stroopColors is null or empty!")
+                    DebugLogger.w("TaskControl", "stroopColors null: ${stroopColors == null}")
+                    DebugLogger.w("TaskControl", "stroopColors empty: ${stroopColors?.isEmpty()}")
+                }
             } else {
                 DebugLogger.w("TaskControl", "RuntimeConfig is NULL - will use hardcoded fallback colors")
             }
@@ -71,33 +85,79 @@ class TaskControlNetworkManager(
             DebugLogger.d("TaskControl", "Colors being sent to Projector: $colorsToSend")
             DebugLogger.d("TaskControl", "Final color count: ${colorsToSend.size}")
 
+            // ENHANCED DEBUG: Verify color mappings before creating StroopSettings
+            val actualColorMappings = runtimeConfig?.baseConfig?.stroopColors ?: emptyMap()
+            DebugLogger.d("TaskControl", "=== FINAL COLOR MAPPINGS VERIFICATION ===")
+            DebugLogger.d("TaskControl", "Actual color mappings being sent: $actualColorMappings")
+            DebugLogger.d("TaskControl", "Color mappings size: ${actualColorMappings.size}")
+            DebugLogger.d("TaskControl", "Color mappings empty: ${actualColorMappings.isEmpty()}")
+
+            if (actualColorMappings.isNotEmpty()) {
+                actualColorMappings.forEach { (name, hex) ->
+                    DebugLogger.d("TaskControl", "  Final mapping: '$name' -> '$hex'")
+                }
+            } else {
+                DebugLogger.e("TaskControl", "CRITICAL: actualColorMappings is EMPTY!")
+                DebugLogger.e("TaskControl", "This will cause Projector to fall back to hardcoded colors!")
+
+                // Additional debug to trace the source of the problem
+                DebugLogger.d("TaskControl", "Debug trace:")
+                DebugLogger.d("TaskControl", "  - runtimeConfig: ${runtimeConfig}")
+                DebugLogger.d("TaskControl", "  - runtimeConfig.baseConfig: ${runtimeConfig?.baseConfig}")
+                DebugLogger.d("TaskControl", "  - runtimeConfig.baseConfig.stroopColors: ${runtimeConfig?.baseConfig?.stroopColors}")
+            }
+
+            // Create StroopSettings with enhanced logging
+            val stroopSettings = StroopSettings(
+                displayDurationMs = timing.stroopDisplayDuration.toLong(),
+                minIntervalMs = timing.minInterval.toLong(),
+                maxIntervalMs = timing.maxInterval.toLong(),
+                countdownDurationMs = timing.countdownDuration * 1000L,
+                colors = colorsToSend,
+                colorMappings = actualColorMappings, // Use the pre-verified mappings
+                language = "de-DE"
+            )
+
+            // DEBUG: Log the complete StroopSettings being sent
+            DebugLogger.d("TaskControl", "=== STROOP SETTINGS FINAL CHECK ===")
+            DebugLogger.d("TaskControl", "StroopSettings.colors: ${stroopSettings.colors}")
+            DebugLogger.d("TaskControl", "StroopSettings.colors.size: ${stroopSettings.colors.size}")
+            DebugLogger.d("TaskControl", "StroopSettings.colorMappings: ${stroopSettings.colorMappings}")
+            DebugLogger.d("TaskControl", "StroopSettings.colorMappings.size: ${stroopSettings.colorMappings.size}")
+            DebugLogger.d("TaskControl", "StroopSettings.displayDurationMs: ${stroopSettings.displayDurationMs}")
+            DebugLogger.d("TaskControl", "StroopSettings.minIntervalMs: ${stroopSettings.minIntervalMs}")
+            DebugLogger.d("TaskControl", "StroopSettings.maxIntervalMs: ${stroopSettings.maxIntervalMs}")
+            DebugLogger.d("TaskControl", "StroopSettings.countdownDurationMs: ${stroopSettings.countdownDurationMs}")
+
             // Create and send StartTaskMessage
             val startMessage = StartTaskMessage(
                 sessionId = sessionId,
                 taskId = taskId,
                 taskLabel = taskLabel,
                 timeoutSeconds = (taskTimeoutMs / 1000).toInt(),
-                stroopSettings = StroopSettings(
-                    displayDurationMs = timing.stroopDisplayDuration.toLong(),
-                    minIntervalMs = timing.minInterval.toLong(),
-                    maxIntervalMs = timing.maxInterval.toLong(),
-                    countdownDurationMs = timing.countdownDuration * 1000L,
-                    colors = colorsToSend,
-                    language = "de-DE"
-                )
+                stroopSettings = stroopSettings
             )
 
-            // DEBUG: Log the complete StroopSettings being sent
-            DebugLogger.d("TaskControl", "StroopSettings being sent: ${startMessage.stroopSettings}")
+            // FINAL DEBUG: Log the complete message before sending
+            DebugLogger.d("TaskControl", "=== START TASK MESSAGE FINAL ===")
+            DebugLogger.d("TaskControl", "StartTaskMessage.sessionId: ${startMessage.sessionId}")
+            DebugLogger.d("TaskControl", "StartTaskMessage.taskId: ${startMessage.taskId}")
+            DebugLogger.d("TaskControl", "StartTaskMessage.taskLabel: ${startMessage.taskLabel}")
+            DebugLogger.d("TaskControl", "StartTaskMessage.timeoutSeconds: ${startMessage.timeoutSeconds}")
+            DebugLogger.d("TaskControl", "StartTaskMessage.stroopSettings: ${startMessage.stroopSettings}")
 
             networkClient.sendMessage(startMessage)
             _currentTaskState.value = TaskState.Starting(taskId, taskLabel)
 
             DebugLogger.d("TaskControl", "START_TASK message sent successfully")
+            DebugLogger.d("TaskControl", "=== TASK START DEBUG COMPLETE ===")
             true
 
         } catch (e: Exception) {
             DebugLogger.e("TaskControl", "Error starting task", e)
+            DebugLogger.e("TaskControl", "Exception type: ${e.javaClass.simpleName}")
+            DebugLogger.e("TaskControl", "Exception message: ${e.message}")
+            e.printStackTrace()
             _lastTaskError.value = "Error starting task: ${e.message}"
             _currentTaskState.value = TaskState.Error("START_FAILED", e.message ?: "Unknown error")
             false

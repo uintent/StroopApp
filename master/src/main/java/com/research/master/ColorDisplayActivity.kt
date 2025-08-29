@@ -154,10 +154,14 @@ class ColorDisplayActivity : AppCompatActivity() {
             try {
                 when (val result = fileManager.loadConfiguration()) {
                     is ConfigLoadResult.Success -> {
-                        // Store the complete RuntimeConfig
                         runtimeConfig = result.config
 
-                        // Get countdown duration from the effective timing config
+                        DebugLogger.d("TaskControl", "=== LOADED CONFIG DEBUG ===")
+                        DebugLogger.d("TaskControl", "Colors loaded: ${result.config.baseConfig.stroopColors.size}")
+                        result.config.baseConfig.stroopColors.forEach { (name, hex) ->
+                            DebugLogger.d("TaskControl", "  Config color: '$name' -> '$hex'")
+                        }
+
                         val configCountdown = result.config.getEffectiveTiming().countdownDuration * 1000L
                         countdownDuration = configCountdown
 
@@ -931,37 +935,37 @@ class ColorDisplayActivity : AppCompatActivity() {
     private fun startTask() {
         val sessionIdValue = currentSessionId ?: return
 
-        // Get fresh iteration counter for this attempt - ensures counter increments
         lifecycleScope.launch {
             try {
-                // Update iteration counter before starting task
                 iterationCounter = SessionManager.getNextIterationCounter(taskNumber)
                 DebugLogger.d("TaskControl", "Starting task: $taskNumber (iteration $iterationCounter)")
 
                 // Debug RuntimeConfig state before sending
                 if (runtimeConfig != null) {
                     DebugLogger.d("TaskControl", "Passing RuntimeConfig with ${runtimeConfig!!.baseConfig.stroopColors.size} colors to TaskControlManager")
-                    DebugLogger.d("TaskControl", "Colors: ${runtimeConfig!!.baseConfig.stroopColors.keys}")
+                    DebugLogger.d("TaskControl", "Master config colors:")
+                    runtimeConfig!!.baseConfig.stroopColors.forEach { (name, hex) ->
+                        DebugLogger.d("TaskControl", "  Master color: '$name' -> '$hex'")
+                    }
                 } else {
                     DebugLogger.w("TaskControl", "RuntimeConfig is null - TaskControlManager will use fallback colors")
                 }
 
-                // Reset data collection for new task iteration
                 resetDataCollection()
                 isTaskTimedOut = false
                 isTaskRunning = true
 
-                // FIXED: Pass the loaded RuntimeConfig to ensure proper color configuration
                 val success = taskControlManager.startTask(
-                    taskId = taskNumber.toString(), // Convert to String for network compatibility
+                    taskId = taskNumber.toString(),
                     taskLabel = taskLabel ?: getString(R.string.color_display_unknown_task),
                     taskTimeoutMs = (taskTimeout * 1000).toLong(),
                     sessionId = sessionIdValue,
-                    runtimeConfig = runtimeConfig // FIXED: Pass the loaded config!
+                    runtimeConfig = runtimeConfig
                 )
 
                 if (!success) {
                     isTaskRunning = false
+                    DebugLogger.e("TaskControl", "Failed to start task via TaskControlManager")
                     Snackbar.make(
                         binding.root,
                         getString(R.string.color_display_failed_start),

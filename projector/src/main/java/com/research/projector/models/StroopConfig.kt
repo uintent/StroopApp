@@ -78,14 +78,25 @@ data class StroopConfig(
      * Gets all available color words as a list
      */
     fun getColorWords(): List<String> = stroopColors.keys.toList()
-    
+
     /**
      * Gets all available colors as Android Color integers
      */
     fun getColorInts(): Map<String, Int> {
-        return stroopColors.mapValues { (_, hexValue) ->
-            Color.parseColor(hexValue)
+        android.util.Log.d("StroopConfig", "=== getColorInts() DEBUG ===")
+        android.util.Log.d("StroopConfig", "Raw stroopColors map: $stroopColors")
+        stroopColors.forEach { (name, hex) ->
+            android.util.Log.d("StroopConfig", "Raw color: '$name' = '$hex'")
         }
+
+        val result = stroopColors.mapValues { (colorName, hexValue) ->
+            val parsed = android.graphics.Color.parseColor(hexValue)
+            android.util.Log.d("StroopConfig", "Parsed '$colorName' ('$hexValue') -> $parsed")
+            parsed
+        }
+
+        android.util.Log.d("StroopConfig", "Final result: $result")
+        return result
     }
     
     private fun isValidHexColor(hexValue: String): Boolean {

@@ -275,6 +275,7 @@ data class StroopSettings(
     val maxIntervalMs: Long = 3000,
     val countdownDurationMs: Long = 4000,
     val colors: List<String> = listOf("rot", "blau", "grün", "gelb", "schwarz", "braun"),
+    val colorMappings: Map<String, String> = emptyMap(), // NEW: name -> hex mappings
     val language: String = "de-DE"
 )
 

@@ -1,15 +1,13 @@
 {
   "stroop_colors": {
-    "rot": "#FF0000",
-    "blau": "#0000FF",
-    "grün": "#00FF00",
-    "gelb": "#FFFF00",
-    "schwarz": "#000000",
-    "braun": "#8B4513",
-    "orange": "#FF8000",
-    "lila": "#800080",
     "红色": "#FF0000",
-    "蓝色": "#0000FF"
+    "蓝色": "#0000FF",
+    "绿色": "#00FF00",
+    "黄色": "#FFFF00",
+    "黑色": "#000000",
+    "棕色": "#8B4513",
+    "橙色": "#FF8000",
+    "紫色": "#800080"
   },
   "tasks": {
     "1": {
@@ -25,7 +23,7 @@
     "3": {
       "label": "Climate Controls (Defog)",
       "text": "Please activate the defogging for the wind screen.",
-      "timeout_seconds": 30
+      "timeout_seconds": 60
     },
     "4": {
       "label": "Hazard lights",
